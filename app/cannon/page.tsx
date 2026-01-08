@@ -43,10 +43,10 @@ class SoundManager {
   private masterGain: GainNode | null = null;
   private initialized = false;
 
-  // AudioContext 초기화 (사용자 액션에서 호출)
+  // AudioContext 초기화 (내부에서만)
   private init() {
     if (this.initialized && this.audioContext) return;
-    
+
     try {
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       this.masterGain = this.audioContext.createGain();
@@ -56,6 +56,11 @@ class SoundManager {
     } catch (e) {
       console.warn('AudioContext 초기화 실패:', e);
     }
+  }
+
+  // 외부에서 호출하는 “안전한 초기화” 메서드 (✅ public)
+  public ensureInit() {
+    this.init();
   }
 
   // AudioContext 재개 (브라우저 자동재생 제한 대응)
@@ -73,17 +78,17 @@ class SoundManager {
 
     const oscillator = this.audioContext.createOscillator();
     const gainNode = this.audioContext.createGain();
-    
+
     oscillator.type = 'sine';
     oscillator.frequency.setValueAtTime(200, this.audioContext.currentTime);
     oscillator.frequency.exponentialRampToValueAtTime(100, this.audioContext.currentTime + 0.15);
-    
+
     gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.15);
-    
+
     oscillator.connect(gainNode);
     gainNode.connect(this.masterGain);
-    
+
     oscillator.start();
     oscillator.stop(this.audioContext.currentTime + 0.15);
   }
@@ -96,17 +101,17 @@ class SoundManager {
 
     const oscillator = this.audioContext.createOscillator();
     const gainNode = this.audioContext.createGain();
-    
+
     oscillator.type = 'sawtooth';
     oscillator.frequency.setValueAtTime(150, this.audioContext.currentTime);
     oscillator.frequency.exponentialRampToValueAtTime(80, this.audioContext.currentTime + 0.4);
-    
+
     gainNode.gain.setValueAtTime(0.2, this.audioContext.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.4);
-    
+
     oscillator.connect(gainNode);
     gainNode.connect(this.masterGain);
-    
+
     oscillator.start();
     oscillator.stop(this.audioContext.currentTime + 0.4);
   }
@@ -117,24 +122,26 @@ class SoundManager {
     this.resume();
     if (!this.audioContext || !this.masterGain) return;
 
-    const colors = ['#FF0000', '#FFAA00', '#FFFF00', '#00FF00', '#0000FF', '#FF00FF'];
     const times = [0, 0.05, 0.1, 0.15, 0.2, 0.25];
-    
-    times.forEach((delay, i) => {
+
+    times.forEach((delay) => {
       const oscillator = this.audioContext!.createOscillator();
       const gainNode = this.audioContext!.createGain();
-      
+
       oscillator.type = 'square';
       const baseFreq = 300 + Math.random() * 200;
       oscillator.frequency.setValueAtTime(baseFreq, this.audioContext!.currentTime + delay);
-      oscillator.frequency.exponentialRampToValueAtTime(baseFreq * 0.5, this.audioContext!.currentTime + delay + 0.1);
-      
+      oscillator.frequency.exponentialRampToValueAtTime(
+        baseFreq * 0.5,
+        this.audioContext!.currentTime + delay + 0.1
+      );
+
       gainNode.gain.setValueAtTime(0.25, this.audioContext!.currentTime + delay);
       gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext!.currentTime + delay + 0.1);
-      
+
       oscillator.connect(gainNode);
       gainNode.connect(this.masterGain!);
-      
+
       oscillator.start(this.audioContext!.currentTime + delay);
       oscillator.stop(this.audioContext!.currentTime + delay + 0.1);
     });
@@ -147,7 +154,7 @@ export default function CannonGame() {
   const soundManagerRef = useRef(new SoundManager());
   const particlesRef = useRef<Particle[]>([]);
   const hitTimeRef = useRef<number | null>(null);
-  
+
   const [angle, setAngle] = useState(45);
   const [power, setPower] = useState(50);
   const [cannonball, setCannonball] = useState<Cannonball | null>(null);
@@ -176,10 +183,10 @@ export default function CannonGame() {
     const y = CHARIOT_Y;
 
     // 바퀴 2개
-    ctx.fillStyle = '#8B4513'; // 나무색
+    ctx.fillStyle = '#8B4513';
     ctx.strokeStyle = '#654321';
     ctx.lineWidth = 2;
-    
+
     // 왼쪽 바퀴
     ctx.beginPath();
     ctx.arc(x - 15, y, 12, 0, Math.PI * 2);
@@ -191,7 +198,7 @@ export default function CannonGame() {
     ctx.moveTo(x - 27, y);
     ctx.lineTo(x - 3, y);
     ctx.stroke();
-    
+
     // 오른쪽 바퀴
     ctx.beginPath();
     ctx.arc(x + 15, y, 12, 0, Math.PI * 2);
@@ -204,31 +211,30 @@ export default function CannonGame() {
     ctx.lineTo(x + 27, y);
     ctx.stroke();
 
-    // 차체 (목재)
+    // 차체
     ctx.fillStyle = '#D2691E';
     ctx.fillRect(x - 20, y - 25, 40, 20);
     ctx.strokeStyle = '#8B4513';
     ctx.lineWidth = 2;
     ctx.strokeRect(x - 20, y - 25, 40, 20);
-    
-    // 금속 장식 (앞쪽)
+
+    // 금속 장식
     ctx.fillStyle = '#C0C0C0';
     ctx.fillRect(x - 18, y - 23, 8, 3);
     ctx.fillRect(x + 10, y - 23, 8, 3);
 
-    // 발리스타 프레임 (회전 가능)
+    // 발리스타 프레임
     ctx.save();
     ctx.translate(x, y - 25);
     ctx.rotate((angle * Math.PI) / 180);
-    
-    // 발사 장치 프레임 (목재)
+
     ctx.fillStyle = '#8B4513';
     ctx.fillRect(-3, -15, 6, 30);
     ctx.strokeStyle = '#654321';
     ctx.lineWidth = 2;
     ctx.strokeRect(-3, -15, 6, 30);
-    
-    // 활시위/줄 느낌
+
+    // 줄 느낌
     ctx.strokeStyle = '#654321';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -239,11 +245,10 @@ export default function CannonGame() {
     ctx.moveTo(-8, 10);
     ctx.lineTo(8, 10);
     ctx.stroke();
-    
-    // 발사대 끝부분
+
     ctx.fillStyle = '#654321';
     ctx.fillRect(-2, -20, 4, 8);
-    
+
     ctx.restore();
   };
 
@@ -251,31 +256,30 @@ export default function CannonGame() {
   const createParticles = (x: number, y: number) => {
     const colors = ['#FF0000', '#FFAA00', '#FFFF00', '#00FF00', '#0000FF', '#FF00FF', '#FF1493', '#00FFFF'];
     const particles: Particle[] = [];
-    
+
     for (let i = 0; i < 40; i++) {
-      const angle = (Math.PI * 2 * i) / 40 + Math.random() * 0.5;
+      const a = (Math.PI * 2 * i) / 40 + Math.random() * 0.5;
       const speed = 2 + Math.random() * 4;
       particles.push({
         x,
         y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 2, // 위로 퍼지도록
+        vx: Math.cos(a) * speed,
+        vy: Math.sin(a) * speed - 2,
         color: colors[Math.floor(Math.random() * colors.length)],
         alpha: 1,
         size: 3 + Math.random() * 4,
         life: PARTICLE_LIFETIME,
       });
     }
-    
+
     particlesRef.current = particles;
     hitTimeRef.current = Date.now();
   };
 
-  // 파티클 업데이트
   const updateParticles = () => {
     const now = Date.now();
     if (!hitTimeRef.current || particlesRef.current.length === 0) return;
-    
+
     const elapsed = now - hitTimeRef.current;
     if (elapsed > PARTICLE_LIFETIME) {
       particlesRef.current = [];
@@ -287,9 +291,9 @@ export default function CannonGame() {
       .map((p) => {
         const newX = p.x + p.vx;
         const newY = p.y + p.vy;
-        const newVy = p.vy + GRAVITY * 0.3; // 중력 적용
+        const newVy = p.vy + GRAVITY * 0.3;
         const newAlpha = 1 - elapsed / PARTICLE_LIFETIME;
-        
+
         return {
           ...p,
           x: newX,
@@ -301,7 +305,6 @@ export default function CannonGame() {
       .filter((p) => p.alpha > 0);
   };
 
-  // 파티클 그리기
   const drawParticles = (ctx: CanvasRenderingContext2D) => {
     particlesRef.current.forEach((p) => {
       ctx.save();
@@ -314,7 +317,7 @@ export default function CannonGame() {
     });
   };
 
-  // Canvas 그리기 및 파티클 애니메이션
+  // Canvas 그리기
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -325,25 +328,21 @@ export default function CannonGame() {
     let animationId: number;
 
     const draw = () => {
-      // 파티클 업데이트
-      if (particlesRef.current.length > 0) {
-        updateParticles();
-      }
+      if (particlesRef.current.length > 0) updateParticles();
 
-      // 배경 지우기
+      // 배경
       ctx.fillStyle = '#87CEEB';
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      // 바닥 그리기
+      // 바닥
       ctx.fillStyle = '#8B4513';
       ctx.fillRect(0, GROUND_Y, CANVAS_WIDTH, CANVAS_HEIGHT - GROUND_Y);
       ctx.fillStyle = '#228B22';
       ctx.fillRect(0, GROUND_Y, CANVAS_WIDTH, 10);
 
-      // 로마 전차 그리기
       drawChariot(ctx);
 
-      // 목표물 그리기
+      // 목표물
       if (gameState !== 'hit') {
         ctx.fillStyle = '#FF4444';
         ctx.fillRect(target.x, target.y, target.width, target.height);
@@ -352,7 +351,7 @@ export default function CannonGame() {
         ctx.strokeRect(target.x, target.y, target.width, target.height);
       }
 
-      // 폭발 플래시 (명중 시)
+      // 명중 플래시
       if (gameState === 'hit' && particlesRef.current.length > 0) {
         ctx.save();
         ctx.globalAlpha = 0.6;
@@ -363,10 +362,8 @@ export default function CannonGame() {
         ctx.restore();
       }
 
-      // 파티클 그리기
       drawParticles(ctx);
 
-      // 포탄 그리기
       if (cannonball) {
         ctx.fillStyle = '#000';
         ctx.beginPath();
@@ -374,7 +371,6 @@ export default function CannonGame() {
         ctx.fill();
       }
 
-      // 결과 메시지
       if (gameState === 'hit') {
         ctx.fillStyle = '#00FF00';
         ctx.font = 'bold 48px Arial';
@@ -387,8 +383,11 @@ export default function CannonGame() {
         ctx.fillText('MISS!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
       }
 
-      // 파티클이 있거나 포탄이 날아가는 중이면 계속 애니메이션
-      if (particlesRef.current.length > 0 || gameState === 'flying' || (gameState === 'hit' && particlesRef.current.length > 0)) {
+      if (
+        particlesRef.current.length > 0 ||
+        gameState === 'flying' ||
+        (gameState === 'hit' && particlesRef.current.length > 0)
+      ) {
         animationId = requestAnimationFrame(draw);
       }
     };
@@ -396,14 +395,11 @@ export default function CannonGame() {
     draw();
 
     return () => {
-      if (animationId) {
-        cancelAnimationFrame(animationId);
-      }
+      if (animationId) cancelAnimationFrame(animationId);
     };
   }, [angle, cannonball, target, gameState]);
 
-
-  // 포탄 애니메이션 루프
+  // 포탄 애니메이션
   useEffect(() => {
     if (gameState !== 'flying' || !cannonball) return;
 
@@ -411,44 +407,34 @@ export default function CannonGame() {
       setCannonball((prev) => {
         if (!prev) return null;
 
-        // 포물선 운동 계산
         const newX = prev.x + prev.vx;
         const newY = prev.y + prev.vy;
         const newVy = prev.vy + GRAVITY;
 
-        // 바닥 충돌 체크
         if (newY + prev.radius >= GROUND_Y) {
           setGameState('miss');
           return null;
         }
 
-        // 목표물 충돌 체크 (원-사각형 충돌)
         const closestX = Math.max(target.x, Math.min(newX, target.x + target.width));
         const closestY = Math.max(target.y, Math.min(newY, target.y + target.height));
-        const distanceX = newX - closestX;
-        const distanceY = newY - closestY;
-        const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY);
+        const dx = newX - closestX;
+        const dy = newY - closestY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
 
         if (distance < prev.radius) {
-          // 명중 처리
           createParticles(target.x + target.width / 2, target.y + target.height / 2);
           soundManagerRef.current.playHitSound();
           setGameState('hit');
           return null;
         }
 
-        // 화면 밖으로 나가면 정지
         if (newX < 0 || newX > CANVAS_WIDTH || newY < 0) {
           setGameState('miss');
           return null;
         }
 
-        return {
-          ...prev,
-          x: newX,
-          y: newY,
-          vy: newVy,
-        };
+        return { ...prev, x: newX, y: newY, vy: newVy };
       });
 
       if (gameState === 'flying') {
@@ -459,16 +445,13 @@ export default function CannonGame() {
     animationFrameRef.current = requestAnimationFrame(animate);
 
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
   }, [gameState, cannonball, target]);
 
   const handleShoot = () => {
     if (gameState === 'flying') return;
 
-    // AudioContext 초기화 (사용자 액션)
     soundManagerRef.current.playLaunchSound();
     soundManagerRef.current.playWhooshSound();
 
@@ -487,20 +470,18 @@ export default function CannonGame() {
   };
 
   const handleReset = () => {
-    // AudioContext 초기화 (사용자 액션)
-    soundManagerRef.current.init();
-    
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
+    // ✅ init() 직접 호출 금지 → ensureInit()
+    soundManagerRef.current.ensureInit();
+
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+
     setCannonball(null);
     setGameState('idle');
     setAngle(45);
     setPower(50);
     particlesRef.current = [];
     hitTimeRef.current = null;
-    
-    // 목표물 위치 재설정
+
     const randomY = Math.random() * (GROUND_Y - 200) + 100;
     setTarget({
       x: CANVAS_WIDTH - 150,
@@ -511,8 +492,8 @@ export default function CannonGame() {
   };
 
   const handleSliderChange = () => {
-    // 슬라이더 조작 시 AudioContext 초기화
-    soundManagerRef.current.init();
+    // ✅ 슬라이더 조작 시에도 ensureInit()
+    soundManagerRef.current.ensureInit();
   };
 
   return (
@@ -531,7 +512,6 @@ export default function CannonGame() {
           🎯 포쏘기 게임
         </h1>
 
-        {/* Canvas */}
         <div className="mb-6 flex justify-center">
           <canvas
             ref={canvasRef}
@@ -541,9 +521,7 @@ export default function CannonGame() {
           />
         </div>
 
-        {/* Controls */}
         <div className="space-y-4">
-          {/* 각도 슬라이더 */}
           <div>
             <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-300">
               각도: {angle}°
@@ -562,7 +540,6 @@ export default function CannonGame() {
             />
           </div>
 
-          {/* 힘 슬라이더 */}
           <div>
             <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-300">
               힘: {power}
@@ -581,7 +558,6 @@ export default function CannonGame() {
             />
           </div>
 
-          {/* 버튼 */}
           <div className="flex gap-4">
             <button
               onClick={handleShoot}
