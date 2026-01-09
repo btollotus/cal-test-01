@@ -29,13 +29,19 @@ interface Particle {
   life: number;
 }
 
-const CANVAS_WIDTH = 800;   // ✅ 내부 로직 기준(고정)
-const CANVAS_HEIGHT = 500;  // ✅ 내부 로직 기준(고정)
+const CANVAS_WIDTH = 800;
+const CANVAS_HEIGHT = 500;
 const GROUND_Y = CANVAS_HEIGHT - 50;
 const CHARIOT_X = 50;
 const CHARIOT_Y = GROUND_Y - 15;
 const GRAVITY = 0.5;
-const PARTICLE_LIFETIME = 1200; // ms
+const PARTICLE_LIFETIME = 1200;
+
+// ✅ 요청 반영: 포탄 크기 5배
+const CANNONBALL_RADIUS = 40; // 기존 8 -> 40
+
+// ✅ 라운드 자동 진행(원하시면 600~1200ms로 조절)
+const NEXT_ROUND_DELAY_MS = 900;
 
 // Web Audio API 헬퍼
 class SoundManager {
@@ -171,16 +177,11 @@ export default function CannonGame() {
     if (!el) return;
 
     const update = () => {
-      // ✅ 카드 안쪽 실제 너비(패딩 제외된 내부 너비) 기준
       const containerW = el.clientWidth;
-
-      // ✅ 슬라이더/버튼/상단 UI가 차지하는 높이를 빼고 캔버스 영역 확보
-      // (모바일 주소창 변동 고려해서 대략 넉넉히 잡습니다)
       const maxH = Math.max(240, window.innerHeight - 330);
 
       const scale = Math.min(containerW / CANVAS_WIDTH, maxH / CANVAS_HEIGHT);
 
-      // 너무 작아지면 조작이 불편하니 하한만 살짝 둡니다.
       const w = Math.floor(CANVAS_WIDTH * scale);
       const h = Math.floor(CANVAS_HEIGHT * scale);
 
@@ -202,8 +203,8 @@ export default function CannonGame() {
     };
   }, []);
 
-  // 초기 목표물 위치 랜덤 생성
-  useEffect(() => {
+  // ✅ 목표물 생성 함수(재사용)
+  const spawnTarget = () => {
     const randomY = Math.random() * (GROUND_Y - 200) + 100;
     setTarget({
       x: CANVAS_WIDTH - 150,
@@ -211,7 +212,31 @@ export default function CannonGame() {
       width: 60,
       height: 60,
     });
+  };
+
+  // 초기 목표물
+  useEffect(() => {
+    spawnTarget();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ✅ 한 판 끝나면( hit / miss ) 자동으로 다음 판 세팅
+  useEffect(() => {
+    if (gameState !== 'hit' && gameState !== 'miss') return;
+
+    const t = window.setTimeout(() => {
+      // 파티클/텍스트 잠깐 보여준 뒤 다음 판
+      particlesRef.current = [];
+      hitTimeRef.current = null;
+
+      setCannonball(null);
+      setGameState('idle');
+      spawnTarget();
+    }, NEXT_ROUND_DELAY_MS);
+
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState]);
 
   // 로마 전차 그리기
   const drawChariot = (ctx: CanvasRenderingContext2D) => {
@@ -359,7 +384,6 @@ export default function CannonGame() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // ✅ 내부 해상도 고정(선명도 유지)
     canvas.width = CANVAS_WIDTH;
     canvas.height = CANVAS_HEIGHT;
 
@@ -378,6 +402,7 @@ export default function CannonGame() {
 
       drawChariot(ctx);
 
+      // hit 상태에서는 목표물 숨김(기존 유지)
       if (gameState !== 'hit') {
         ctx.fillStyle = '#FF4444';
         ctx.fillRect(target.x, target.y, target.width, target.height);
@@ -417,13 +442,8 @@ export default function CannonGame() {
         ctx.fillText('MISS!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
       }
 
-      if (
-        particlesRef.current.length > 0 ||
-        gameState === 'flying' ||
-        (gameState === 'hit' && particlesRef.current.length > 0)
-      ) {
-        animationId = requestAnimationFrame(draw);
-      }
+      // ✅ hit/miss 상태에서도 다음 라운드 전까지 계속 그려주면 더 자연스럽습니다.
+      animationId = requestAnimationFrame(draw);
     };
 
     draw();
@@ -445,11 +465,13 @@ export default function CannonGame() {
         const newY = prev.y + prev.vy;
         const newVy = prev.vy + GRAVITY;
 
+        // 바닥 닿으면 miss
         if (newY + prev.radius >= GROUND_Y) {
           setGameState('miss');
           return null;
         }
 
+        // 목표물 충돌 판정
         const closestX = Math.max(target.x, Math.min(newX, target.x + target.width));
         const closestY = Math.max(target.y, Math.min(newY, target.y + target.height));
         const dx = newX - closestX;
@@ -484,22 +506,27 @@ export default function CannonGame() {
   }, [gameState, cannonball, target]);
 
   const handleShoot = () => {
+    // ✅ 날아가는 중엔 발사 불가
     if (gameState === 'flying') return;
 
     soundManagerRef.current.playLaunchSound();
     soundManagerRef.current.playWhooshSound();
 
     const angleRad = (angle * Math.PI) / 180;
-    const vx = Math.cos(angleRad) * power * 0.5;
-    const vy = -Math.sin(angleRad) * power * 0.5;
+
+    // ✅ 요청 반영: 속도 1/2
+    // 기존: * power * 0.5  →  * power * 0.25
+    const vx = Math.cos(angleRad) * power * 0.25;
+    const vy = -Math.sin(angleRad) * power * 0.25;
 
     setCannonball({
       x: CHARIOT_X + Math.cos(angleRad) * 30,
       y: CHARIOT_Y - 25 - Math.sin(angleRad) * 30,
       vx,
       vy,
-      radius: 8,
+      radius: CANNONBALL_RADIUS,
     });
+
     setGameState('flying');
   };
 
@@ -515,13 +542,7 @@ export default function CannonGame() {
     particlesRef.current = [];
     hitTimeRef.current = null;
 
-    const randomY = Math.random() * (GROUND_Y - 200) + 100;
-    setTarget({
-      x: CANVAS_WIDTH - 150,
-      y: randomY,
-      width: 60,
-      height: 60,
-    });
+    spawnTarget();
   };
 
   const handleSliderChange = () => {
@@ -544,7 +565,6 @@ export default function CannonGame() {
           🎯 포쏘기 게임
         </h1>
 
-        {/* ✅ 여기서 실제 카드 내부 너비 기준으로 캔버스 크기 계산 */}
         <div ref={wrapRef} className="mb-5 flex justify-center">
           <canvas
             ref={canvasRef}
@@ -611,6 +631,10 @@ export default function CannonGame() {
             >
               🔄 리셋
             </button>
+          </div>
+
+          <div className="text-center text-xs text-gray-500 dark:text-gray-300">
+            HIT/MISS 후 {Math.round(NEXT_ROUND_DELAY_MS / 100) / 10}초 뒤 자동으로 다음 목표물이 생성됩니다.
           </div>
         </div>
       </div>
