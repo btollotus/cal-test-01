@@ -197,6 +197,14 @@ export default function Home() {
   >
     🚗 자동차 피하기
   </Link>
+ {/* ✅ 새 버튼: 가위바위보보 */}
+  <Link
+  href="/rps"
+  className="flex-1 rounded-lg bg-purple-600 px-4 py-3 text-center text-lg font-semibold text-white transition-colors hover:bg-purple-700 active:bg-purple-800"
+>
+  ✊✋✌️ 가위바위보
+</Link>
+
 </div>
 
 
