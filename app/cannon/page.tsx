@@ -38,7 +38,7 @@ const GRAVITY = 0.5;
 const PARTICLE_LIFETIME = 1200;
 
 // ✅ 요청 반영: 포탄 크기 5배
-const CANNONBALL_RADIUS = 40; // 기존 8 -> 40
+const CANNONBALL_RADIUS = 27; // 기존 8 -> 40
 
 // ✅ 라운드 자동 진행(원하시면 600~1200ms로 조절)
 const NEXT_ROUND_DELAY_MS = 900;
