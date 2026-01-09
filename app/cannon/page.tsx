@@ -160,26 +160,46 @@ export default function CannonGame() {
   }));
   const [gameState, setGameState] = useState<'idle' | 'flying' | 'hit' | 'miss'>('idle');
 
-  // ✅ 화면에 맞춘 캔버스 표시 크기
+  // ✅ 캔버스를 담는 래퍼(실제 너비 기준으로 스케일 계산)
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  // ✅ 화면에 맞춘 캔버스 표시 크기 (CSS로만 조절, 내부 해상도는 고정)
   const [viewSize, setViewSize] = useState({ w: CANVAS_WIDTH, h: CANVAS_HEIGHT });
 
   useEffect(() => {
-    const update = () => {
-      // 상단/하단 UI 공간을 고려해 높이 여유를 둡니다.
-      const maxW = Math.min(window.innerWidth - 24, 980);
-      const maxH = window.innerHeight - 260;
+    const el = wrapRef.current;
+    if (!el) return;
 
-      const scale = Math.min(maxW / CANVAS_WIDTH, maxH / CANVAS_HEIGHT);
+    const update = () => {
+      // ✅ 카드 안쪽 실제 너비(패딩 제외된 내부 너비) 기준
+      const containerW = el.clientWidth;
+
+      // ✅ 슬라이더/버튼/상단 UI가 차지하는 높이를 빼고 캔버스 영역 확보
+      // (모바일 주소창 변동 고려해서 대략 넉넉히 잡습니다)
+      const maxH = Math.max(240, window.innerHeight - 330);
+
+      const scale = Math.min(containerW / CANVAS_WIDTH, maxH / CANVAS_HEIGHT);
+
+      // 너무 작아지면 조작이 불편하니 하한만 살짝 둡니다.
+      const w = Math.floor(CANVAS_WIDTH * scale);
+      const h = Math.floor(CANVAS_HEIGHT * scale);
 
       setViewSize({
-        w: Math.max(280, Math.floor(CANVAS_WIDTH * scale)),
-        h: Math.max(180, Math.floor(CANVAS_HEIGHT * scale)),
+        w: Math.max(280, w),
+        h: Math.max(180, h),
       });
     };
 
     update();
+
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+
     window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', update);
+    };
   }, []);
 
   // 초기 목표물 위치 랜덤 생성
@@ -524,14 +544,19 @@ export default function CannonGame() {
           🎯 포쏘기 게임
         </h1>
 
-        <div className="mb-5 flex justify-center">
+        {/* ✅ 여기서 실제 카드 내부 너비 기준으로 캔버스 크기 계산 */}
+        <div ref={wrapRef} className="mb-5 flex justify-center">
           <canvas
             ref={canvasRef}
             width={CANVAS_WIDTH}
             height={CANVAS_HEIGHT}
-            className="rounded-lg border-2 border-gray-300 dark:border-gray-600"
-            // ✅ 실제 표시 크기만 화면에 맞게 자동 조절
-            style={{ width: viewSize.w, height: viewSize.h, touchAction: 'none' }}
+            className="block rounded-lg border-2 border-gray-300 dark:border-gray-600"
+            style={{
+              width: viewSize.w,
+              height: viewSize.h,
+              maxWidth: '100%',
+              touchAction: 'none',
+            }}
           />
         </div>
 
