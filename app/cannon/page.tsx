@@ -29,13 +29,13 @@ interface Particle {
   life: number;
 }
 
-const CANVAS_WIDTH = 800;
-const CANVAS_HEIGHT = 500;
+const CANVAS_WIDTH = 800;   // ✅ 내부 로직 기준(고정)
+const CANVAS_HEIGHT = 500;  // ✅ 내부 로직 기준(고정)
 const GROUND_Y = CANVAS_HEIGHT - 50;
 const CHARIOT_X = 50;
 const CHARIOT_Y = GROUND_Y - 15;
 const GRAVITY = 0.5;
-const PARTICLE_LIFETIME = 1200; // 1.2초 (ms)
+const PARTICLE_LIFETIME = 1200; // ms
 
 // Web Audio API 헬퍼
 class SoundManager {
@@ -43,7 +43,6 @@ class SoundManager {
   private masterGain: GainNode | null = null;
   private initialized = false;
 
-  // AudioContext 초기화 (내부에서만)
   private init() {
     if (this.initialized && this.audioContext) return;
 
@@ -58,19 +57,16 @@ class SoundManager {
     }
   }
 
-  // 외부에서 호출하는 “안전한 초기화” 메서드 (✅ public)
   public ensureInit() {
     this.init();
   }
 
-  // AudioContext 재개 (브라우저 자동재생 제한 대응)
   private resume() {
     if (this.audioContext && this.audioContext.state === 'suspended') {
       this.audioContext.resume();
     }
   }
 
-  // 발사음: 퉁/펑
   playLaunchSound() {
     this.init();
     this.resume();
@@ -93,7 +89,6 @@ class SoundManager {
     oscillator.stop(this.audioContext.currentTime + 0.15);
   }
 
-  // 비행음: 슈우웅 (0.3~0.5초)
   playWhooshSound() {
     this.init();
     this.resume();
@@ -116,7 +111,6 @@ class SoundManager {
     oscillator.stop(this.audioContext.currentTime + 0.4);
   }
 
-  // 명중음: 팝팝팝 + 폭죽 느낌
   playHitSound() {
     this.init();
     this.resume();
@@ -166,6 +160,28 @@ export default function CannonGame() {
   }));
   const [gameState, setGameState] = useState<'idle' | 'flying' | 'hit' | 'miss'>('idle');
 
+  // ✅ 화면에 맞춘 캔버스 표시 크기
+  const [viewSize, setViewSize] = useState({ w: CANVAS_WIDTH, h: CANVAS_HEIGHT });
+
+  useEffect(() => {
+    const update = () => {
+      // 상단/하단 UI 공간을 고려해 높이 여유를 둡니다.
+      const maxW = Math.min(window.innerWidth - 24, 980);
+      const maxH = window.innerHeight - 260;
+
+      const scale = Math.min(maxW / CANVAS_WIDTH, maxH / CANVAS_HEIGHT);
+
+      setViewSize({
+        w: Math.max(280, Math.floor(CANVAS_WIDTH * scale)),
+        h: Math.max(180, Math.floor(CANVAS_HEIGHT * scale)),
+      });
+    };
+
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
   // 초기 목표물 위치 랜덤 생성
   useEffect(() => {
     const randomY = Math.random() * (GROUND_Y - 200) + 100;
@@ -182,7 +198,6 @@ export default function CannonGame() {
     const x = CHARIOT_X;
     const y = CHARIOT_Y;
 
-    // 바퀴 2개
     ctx.fillStyle = '#8B4513';
     ctx.strokeStyle = '#654321';
     ctx.lineWidth = 2;
@@ -234,7 +249,6 @@ export default function CannonGame() {
     ctx.lineWidth = 2;
     ctx.strokeRect(-3, -15, 6, 30);
 
-    // 줄 느낌
     ctx.strokeStyle = '#654321';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -252,7 +266,7 @@ export default function CannonGame() {
     ctx.restore();
   };
 
-  // 폭죽 파티클 생성
+  // 파티클 생성
   const createParticles = (x: number, y: number) => {
     const colors = ['#FF0000', '#FFAA00', '#FFFF00', '#00FF00', '#0000FF', '#FF00FF', '#FF1493', '#00FFFF'];
     const particles: Particle[] = [];
@@ -325,16 +339,18 @@ export default function CannonGame() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // ✅ 내부 해상도 고정(선명도 유지)
+    canvas.width = CANVAS_WIDTH;
+    canvas.height = CANVAS_HEIGHT;
+
     let animationId: number;
 
     const draw = () => {
       if (particlesRef.current.length > 0) updateParticles();
 
-      // 배경
       ctx.fillStyle = '#87CEEB';
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      // 바닥
       ctx.fillStyle = '#8B4513';
       ctx.fillRect(0, GROUND_Y, CANVAS_WIDTH, CANVAS_HEIGHT - GROUND_Y);
       ctx.fillStyle = '#228B22';
@@ -342,7 +358,6 @@ export default function CannonGame() {
 
       drawChariot(ctx);
 
-      // 목표물
       if (gameState !== 'hit') {
         ctx.fillStyle = '#FF4444';
         ctx.fillRect(target.x, target.y, target.width, target.height);
@@ -351,7 +366,6 @@ export default function CannonGame() {
         ctx.strokeRect(target.x, target.y, target.width, target.height);
       }
 
-      // 명중 플래시
       if (gameState === 'hit' && particlesRef.current.length > 0) {
         ctx.save();
         ctx.globalAlpha = 0.6;
@@ -470,7 +484,6 @@ export default function CannonGame() {
   };
 
   const handleReset = () => {
-    // ✅ init() 직접 호출 금지 → ensureInit()
     soundManagerRef.current.ensureInit();
 
     if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
@@ -492,14 +505,13 @@ export default function CannonGame() {
   };
 
   const handleSliderChange = () => {
-    // ✅ 슬라이더 조작 시에도 ensureInit()
     soundManagerRef.current.ensureInit();
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800 p-4">
-      <div className="w-full max-w-4xl rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-800">
-        <div className="mb-4">
+    <div className="min-h-[100dvh] bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800 p-4">
+      <div className="mx-auto w-full max-w-4xl rounded-2xl bg-white p-4 md:p-6 shadow-2xl dark:bg-gray-800">
+        <div className="mb-3">
           <Link
             href="/"
             className="inline-block rounded-lg bg-gray-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-600"
@@ -508,16 +520,18 @@ export default function CannonGame() {
           </Link>
         </div>
 
-        <h1 className="mb-6 text-center text-3xl font-bold text-gray-800 dark:text-gray-100">
+        <h1 className="mb-4 text-center text-2xl md:text-3xl font-bold text-gray-800 dark:text-gray-100">
           🎯 포쏘기 게임
         </h1>
 
-        <div className="mb-6 flex justify-center">
+        <div className="mb-5 flex justify-center">
           <canvas
             ref={canvasRef}
             width={CANVAS_WIDTH}
             height={CANVAS_HEIGHT}
             className="rounded-lg border-2 border-gray-300 dark:border-gray-600"
+            // ✅ 실제 표시 크기만 화면에 맞게 자동 조절
+            style={{ width: viewSize.w, height: viewSize.h, touchAction: 'none' }}
           />
         </div>
 
@@ -558,7 +572,7 @@ export default function CannonGame() {
             />
           </div>
 
-          <div className="flex gap-4">
+          <div className="flex gap-3">
             <button
               onClick={handleShoot}
               disabled={gameState === 'flying'}
