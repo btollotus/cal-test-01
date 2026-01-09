@@ -175,20 +175,30 @@ export default function Home() {
         ].join(" ")}
       >
         <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-800">
-          <div className="mb-4 flex gap-2">
-            <Link
-              href="/cannon"
-              className="flex-1 rounded-lg bg-blue-500 px-4 py-3 text-center text-lg font-semibold text-white transition-colors hover:bg-blue-600 active:bg-blue-700"
-            >
-              🎯 포쏘기
-            </Link>
-            <Link
-              href="/archery"
-              className="flex-1 rounded-lg bg-green-500 px-4 py-3 text-center text-lg font-semibold text-white transition-colors hover:bg-green-600 active:bg-green-700"
-            >
-              🏹 활쏘기
-            </Link>
-          </div>
+        <div className="mb-4 grid grid-cols-2 gap-2">
+  <Link
+    href="/cannon"
+    className="rounded-lg bg-blue-500 px-4 py-3 text-center text-lg font-semibold text-white transition-colors hover:bg-blue-600 active:bg-blue-700"
+  >
+    🎯 포쏘기
+  </Link>
+
+  <Link
+    href="/archery"
+    className="rounded-lg bg-green-500 px-4 py-3 text-center text-lg font-semibold text-white transition-colors hover:bg-green-600 active:bg-green-700"
+  >
+    🏹 활쏘기
+  </Link>
+
+  {/* ✅ 새 버튼: 자동차 피하기 */}
+  <Link
+    href="/runner"
+    className="col-span-2 rounded-lg bg-purple-600 px-4 py-3 text-center text-lg font-semibold text-white transition-colors hover:bg-purple-700 active:bg-purple-800"
+  >
+    🚗 자동차 피하기
+  </Link>
+</div>
+
 
           {/* Display */}
           <div className="mb-6 rounded-lg bg-gray-900 p-6 text-right dark:bg-gray-950">
