@@ -176,34 +176,42 @@ export default function Home() {
       >
         <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-800">
         <div className="mb-4 grid grid-cols-2 gap-2">
-  <Link
+        <Link
     href="/cannon"
-    className="rounded-lg bg-blue-500 px-4 py-3 text-center text-lg font-semibold text-white transition-colors hover:bg-blue-600 active:bg-blue-700"
+    className="rounded-lg bg-blue-600 px-3 py-3 text-center text-base font-semibold text-white transition-colors hover:bg-blue-700 active:bg-blue-800 md:px-4 md:py-4 md:text-lg"
   >
     🎯 포쏘기
   </Link>
 
   <Link
     href="/archery"
-    className="rounded-lg bg-green-500 px-4 py-3 text-center text-lg font-semibold text-white transition-colors hover:bg-green-600 active:bg-green-700"
+    className="rounded-lg bg-green-600 px-3 py-3 text-center text-base font-semibold text-white transition-colors hover:bg-green-700 active:bg-green-800 md:px-4 md:py-4 md:text-lg"
   >
     🏹 활쏘기
   </Link>
 
-  {/* ✅ 새 버튼: 자동차 피하기 */}
   <Link
     href="/runner"
-    className="col-span-2 rounded-lg bg-purple-600 px-4 py-3 text-center text-lg font-semibold text-white transition-colors hover:bg-purple-700 active:bg-purple-800"
+    className="rounded-lg bg-purple-600 px-3 py-3 text-center text-base font-semibold text-white transition-colors hover:bg-purple-700 active:bg-purple-800 md:px-4 md:py-4 md:text-lg"
   >
     🚗 자동차 피하기
   </Link>
- {/* ✅ 새 버튼: 가위바위보보 */}
+
   <Link
-  href="/rps"
-  className="flex-1 rounded-lg bg-purple-600 px-4 py-3 text-center text-lg font-semibold text-white transition-colors hover:bg-purple-700 active:bg-purple-800"
->
-  ✊✋✌️ 가위바위보
-</Link>
+    href="/rps"
+    className="rounded-lg bg-pink-600 px-3 py-3 text-center text-base font-semibold text-white transition-colors hover:bg-pink-700 active:bg-pink-800 md:px-4 md:py-4 md:text-lg"
+  >
+    ✊✋✌️ 가위바위보
+  </Link>
+
+  {/* ✅ 로또번호 생성기 버튼 (가로 2칸 꽉) */}
+  <Link
+    href="/lotto"
+    className="col-span-2 rounded-lg bg-amber-600 px-3 py-3 text-center text-base font-semibold text-white transition-colors hover:bg-amber-700 active:bg-amber-800 md:px-4 md:py-4 md:text-lg"
+  >
+    🎲 로또번호 생성기
+  </Link>
+  
 
 </div>
 
