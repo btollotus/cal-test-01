@@ -11,9 +11,21 @@ export default function LottoPage() {
     if (n <= 40) return 'bg-gray-500 text-white';
     return 'bg-green-500 text-white';
   };
-  
-  const [history, setHistory] = useState<number[][]>([]);
 
+  // ✅ 공(볼) UI를 하나로 통일: 위/아래 모두 이걸 씀
+  const Ball = ({ n }: { n: number }) => (
+    <div
+      className={[
+        // ✅ 기존 “생성된 번호” 공과 동일 크기/동일 글자 크기
+        'grid h-10 w-10 place-items-center rounded-full text-base font-extrabold shadow',
+        getBallColor(n),
+      ].join(' ')}
+    >
+      {n}
+    </div>
+  );
+
+  const [history, setHistory] = useState<number[][]>([]);
   const current = history[0] ?? null;
 
   const generate = () => {
@@ -23,7 +35,7 @@ export default function LottoPage() {
 
     setHistory((prev) => {
       const next = [nums, ...prev];
-      return next.slice(0, 10); // 최근 10개만 보관(원하면 변경)
+      return next.slice(0, 10); // 최근 10개만 보관
     });
   };
 
@@ -58,16 +70,7 @@ export default function LottoPage() {
             <div className="overflow-x-auto">
               <div className="inline-flex min-w-max items-center justify-center gap-3 whitespace-nowrap">
                 {current.map((n) => (
-                 <div
-                 key={n}
-                 className={[
-                   'grid h-10 w-10 place-items-center rounded-full text-base font-extrabold shadow',
-                   getBallColor(n),
-                 ].join(' ')}
-               >
-                 {n}
-               </div>
-               
+                  <Ball key={n} n={n} />
                 ))}
               </div>
             </div>
@@ -97,7 +100,7 @@ export default function LottoPage() {
         {/* 최근 기록 */}
         <div className="rounded-2xl border border-gray-200 p-4 dark:border-gray-700">
           <div className="mb-2 flex items-center justify-between">
-            <div className="text-sm font-bold text-gray-900 dark:text-gray-100">
+            <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
               최근 생성 기록 (최대 10개 표시)
             </div>
             <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -114,14 +117,20 @@ export default function LottoPage() {
               {history.map((nums, idx) => (
                 <div
                   key={idx}
-                  className="rounded-xl bg-gray-50 px-3 py-3 text-sm font-semibold text-gray-900 dark:bg-gray-900/40 dark:text-gray-100"
+                  className="rounded-xl bg-gray-50 px-3 py-3 dark:bg-gray-900/40"
                 >
-                  {nums.join('  ')}
-                  {idx === 0 && (
-                    <span className="ml-2 rounded-full bg-blue-100 px-2 py-1 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-                      최신
-                    </span>
-                  )}
+                  {/* ✅ 최근기록도 공 6개로 표시 (현재번호와 동일 크기/스타일) */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {nums.map((n) => (
+                      <Ball key={`${idx}-${n}`} n={n} />
+                    ))}
+
+                    {idx === 0 && (
+                      <span className="ml-1 rounded-full bg-blue-100 px-2 py-1 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                        최신
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
