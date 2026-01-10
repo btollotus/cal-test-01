@@ -4,6 +4,14 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 
 export default function LottoPage() {
+  const getBallColor = (n: number) => {
+    if (n <= 10) return 'bg-yellow-400 text-black';
+    if (n <= 20) return 'bg-blue-500 text-white';
+    if (n <= 30) return 'bg-red-500 text-white';
+    if (n <= 40) return 'bg-gray-500 text-white';
+    return 'bg-green-500 text-white';
+  };
+  
   const [history, setHistory] = useState<number[][]>([]);
 
   const current = history[0] ?? null;
@@ -50,12 +58,16 @@ export default function LottoPage() {
             <div className="overflow-x-auto">
               <div className="inline-flex min-w-max items-center justify-center gap-3 whitespace-nowrap">
                 {current.map((n) => (
-                  <div
-                    key={n}
-                    className="grid h-14 w-14 place-items-center rounded-full bg-white text-lg font-extrabold text-gray-900 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:ring-gray-700"
-                  >
-                    {n}
-                  </div>
+                 <div
+                 key={n}
+                 className={[
+                   'grid h-11 w-11 place-items-center rounded-full text-base font-extrabold shadow',
+                   getBallColor(n),
+                 ].join(' ')}
+               >
+                 {n}
+               </div>
+               
                 ))}
               </div>
             </div>
