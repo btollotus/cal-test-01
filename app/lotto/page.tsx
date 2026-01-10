@@ -61,7 +61,7 @@ export default function LottoPage() {
                  <div
                  key={n}
                  className={[
-                   'grid h-9 w-9 place-items-center rounded-full text-base font-extrabold shadow',
+                   'grid h-10 w-10 place-items-center rounded-full text-base font-extrabold shadow',
                    getBallColor(n),
                  ].join(' ')}
                >
