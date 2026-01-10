@@ -194,7 +194,7 @@ export default function Home() {
 
   {/* ✅ 로또 버튼 */}
   <Link href="/lotto" className="col-span-2 rounded-lg bg-amber-600 px-3 py-3 text-center text-base font-bold text-white hover:bg-amber-700 active:bg-amber-800">
-    🎲 로또 번호 생성기
+  🧧 로또번호 생성기
   </Link>
 </div>
 
