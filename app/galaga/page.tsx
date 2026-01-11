@@ -799,7 +799,20 @@ export default function GalagaPage() {
           </div>
 
           <div className="mt-2 text-[11px] font-mono opacity-60">
-            {rankLoading ? '불러오는 중…' : rankError ? `불러오기 실패: ${rankError}` : '공유 랭킹(오락실 1대 느낌)'}
+          {rankLoading ? (
+    '불러오는 중…'
+  ) : rankError ? (
+    <>
+      <span className="inline-block rounded-md bg-white/10 px-2 py-1">
+        랭킹 준비중
+      </span>
+      <span className="ml-2 opacity-70">
+        (관리자: Supabase 환경변수 설정 필요)
+      </span>
+    </>
+  ) : (
+    '공유 랭킹(오락실 1대 느낌)'
+  )}
           </div>
 
           <div className="mt-3 grid grid-cols-[40px_1fr_70px] gap-2 text-[11px] font-mono opacity-70">
