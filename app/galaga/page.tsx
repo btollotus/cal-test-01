@@ -46,7 +46,7 @@ const GAME_ID = 'galaga';
 const MAX_NAME_LEN = 10;
 
 // 랭킹 표시 개수
-const MAX_RANK = 20;
+const MAX_RANK = 10;
 
 // 게임 내부 기준 해상도(물리 캔버스는 이 값으로 고정, 화면에는 viewSize로 스케일)
 const BASE_W = 420;
@@ -67,9 +67,8 @@ function formatKST(iso: string) {
 }
 
 function sanitizeName(input: string) {
-  // ✅ 공백 제거 + 허용 문자만 + 10자 제한
   const noSpace = input.replace(/\s+/g, '');
-  const only = noSpace.replace(/[^0-9A-Za-z가-힣_-]/g, '');
+  const only = noSpace.replace(/[^0-9A-Za-z_-]/g, ''); // ✅ 영문/숫자/_- 만
   return only.slice(0, MAX_NAME_LEN);
 }
 
@@ -827,7 +826,20 @@ export default function GalagaPage() {
             ) : (
               sortedBoard.map((r, i) => (
                 <div key={`${r.name}-${r.date}-${i}`} className="grid grid-cols-[40px_1fr_70px] gap-2 text-xs font-mono">
-                  <div className="opacity-80">#{i + 1}</div>
+                  <div
+  className={`font-bold ${
+    i === 0
+      ? 'text-yellow-400'   // 1위 🥇
+      : i === 1
+      ? 'text-gray-300'     // 2위 🥈
+      : i === 2
+      ? 'text-amber-600'    // 3위 🥉
+      : 'text-white/80'    // 4위~
+  }`}
+>
+  {i + 1}
+</div>
+
                   <div className="leading-tight">
                     <div className="opacity-95 break-all">{r.name}</div>
                     <div className="opacity-50">{formatKST(r.date)}</div>
