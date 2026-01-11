@@ -789,7 +789,7 @@ export default function GalagaPage() {
         {/* LEADERBOARD */}
         <div className="rounded-2xl p-4 bg-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.08)]">
           <div className="flex items-center justify-between">
-            <div className="font-mono text-sm">🏆 RANKING</div>
+            <div className="font-mono text-sm">🏆 RANKING 도전 1등!!</div>
             <button onClick={loadRanking} className="text-xs font-mono opacity-70 hover:opacity-100">
               refresh
             </button>
@@ -804,7 +804,6 @@ export default function GalagaPage() {
                 <span className="ml-2 opacity-70">(관리자: Supabase 환경변수 설정 필요)</span>
               </>
             ) : (
-              '공유 랭킹(오락실 1대 느낌)'
             )}
           </div>
 
