@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import OnlineStats from "@/components/OnlineStats";
 
-
 export default function Home() {
   // ✅ Intro 상태
   const [showIntro, setShowIntro] = useState(true);
@@ -166,6 +165,15 @@ export default function Home() {
         </div>
       )}
 
+      {/* ✅ Main UI (기존 그대로) */}
+      <div
+        className={[
+          "flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800",
+          showIntro ? "opacity-0" : "opacity-100 transition-opacity duration-500",
+        ].join(" ")}
+      >
+        <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-800">
+
           {/* ✅ 바로가기 버튼 영역 */}
           <div className="mb-4 grid grid-cols-2 gap-2">
             <Link
@@ -218,7 +226,6 @@ export default function Home() {
             */}
           </div>
 
-
           {/* Display */}
           <div className="mb-6 rounded-lg bg-gray-900 p-6 text-right dark:bg-gray-950">
             <div className="min-h-[60px] text-4xl font-mono font-semibold text-white">
@@ -228,7 +235,6 @@ export default function Home() {
           </div>
 
           <OnlineStats />
-
 
           {/* Buttons */}
           <div className="grid grid-cols-4 gap-3">
@@ -275,4 +281,3 @@ export default function Home() {
     </>
   );
 }
-
