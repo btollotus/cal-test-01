@@ -166,37 +166,57 @@ export default function Home() {
         </div>
       )}
 
-      {/* ✅ Main UI (기존 그대로) */}
-      <div
-        className={[
-          "flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800",
-          // 인트로 끝나기 전엔 살짝 숨김 느낌(선택)
-          showIntro ? "opacity-0" : "opacity-100 transition-opacity duration-500",
-        ].join(" ")}
-      >
-        <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-800">
-        <div className="mb-4 grid grid-cols-2 gap-2">
-  <Link href="/cannon" className="rounded-lg bg-blue-500 px-3 py-3 text-center text-base font-bold text-white hover:bg-blue-600 active:bg-blue-700">
-    🎯 포쏘기
-  </Link>
+          {/* ✅ 바로가기 버튼 영역 */}
+          <div className="mb-4 grid grid-cols-2 gap-2">
+            <Link
+              href="/cannon"
+              className="rounded-lg bg-blue-500 px-3 py-3 text-center text-base font-bold text-white hover:bg-blue-600 active:bg-blue-700"
+            >
+              🎯 포쏘기
+            </Link>
 
-  <Link href="/archery" className="rounded-lg bg-green-500 px-3 py-3 text-center text-base font-bold text-white hover:bg-green-600 active:bg-green-700">
-    🏹 활쏘기
-  </Link>
+            <Link
+              href="/archery"
+              className="rounded-lg bg-green-500 px-3 py-3 text-center text-base font-bold text-white hover:bg-green-600 active:bg-green-700"
+            >
+              🏹 활쏘기
+            </Link>
 
-  <Link href="/runner" className="rounded-lg bg-purple-600 px-3 py-3 text-center text-base font-bold text-white hover:bg-purple-700 active:bg-purple-800">
-    🚗 자동차 피하기
-  </Link>
+            <Link
+              href="/runner"
+              className="rounded-lg bg-purple-600 px-3 py-3 text-center text-base font-bold text-white hover:bg-purple-700 active:bg-purple-800"
+            >
+              🚗 자동차 피하기
+            </Link>
 
-  <Link href="/rps" className="rounded-lg bg-pink-600 px-3 py-3 text-center text-base font-bold text-white hover:bg-pink-700 active:bg-pink-800">
-    ✊✋✌️ 가위바위보
-  </Link>
+            <Link
+              href="/rps"
+              className="rounded-lg bg-pink-600 px-3 py-3 text-center text-base font-bold text-white hover:bg-pink-700 active:bg-pink-800"
+            >
+              ✊✋✌️ 가위바위보
+            </Link>
 
-  {/* ✅ 로또 버튼 */}
-  <Link href="/lotto" className="col-span-2 rounded-lg bg-amber-600 px-3 py-3 text-center text-base font-bold text-white hover:bg-amber-700 active:bg-amber-800">
-  🧧 로또번호 생성기
-  </Link>
-</div>
+            {/* ✅ NEW: 겔러그(갈라가) 버튼 */}
+            <Link
+              href="/galaga"
+              className="rounded-lg bg-sky-600 px-3 py-3 text-center text-base font-bold text-white hover:bg-sky-700 active:bg-sky-800"
+            >
+              🛸 겔러그
+            </Link>
+
+            {/* ✅ 로또 버튼 */}
+            <Link
+              href="/lotto"
+              className="rounded-lg bg-amber-600 px-3 py-3 text-center text-base font-bold text-white hover:bg-amber-700 active:bg-amber-800"
+            >
+              🧧 로또번호 생성기
+            </Link>
+
+            {/* 필요하면 2열 꽉 채우기: 로또를 col-span-2로 유지하고 싶으면 아래처럼 바꾸면 됨
+              - 겔러그 추가로 버튼 수가 늘어서 로또가 자동으로 다음 줄로 내려가요.
+              - “로또는 크게(2칸)”를 계속 원하면 로또에 col-span-2를 다시 넣으면 됩니다.
+            */}
+          </div>
 
 
           {/* Display */}
