@@ -128,7 +128,6 @@ function useSfx() {
       setTimeout(() => beep(988, 0.05, 'square', 0.06), 60);
     };
     return { unlock, shoot, hit, dead, clear, power };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return api;
@@ -156,13 +155,17 @@ export default function GalagaPage() {
   const [nameInput, setNameInput] = useState('');
   const [leaderboard, setLeaderboard] = useState<RankRow[]>([]);
 
-  // ✅ 모바일 버튼용 키 상태를 ref로 들고 있음(게임루프는 1번만 등록되므로)
-  const mobileKeysRef = useRef({ left: false, right: false, fire: false });
-  const setMobileKey = (k: 'left' | 'right' | 'fire', v: boolean) => {
-    mobileKeysRef.current[k] = v;
-  };
+  // ✅ 입력 상태는 ref로(멀티터치/키보드 모두)
+  const inputRef = useRef({
+    mobile: { left: false, right: false, fire: false },
+    kb: { left: false, right: false, fire: false },
+    // 각 버튼이 잡고 있는 pointerId (캡처용)
+    pid: { left: -1, right: -1, fire: -1 },
+  });
+
   const clearMobileKeys = () => {
-    mobileKeysRef.current = { left: false, right: false, fire: false };
+    inputRef.current.mobile = { left: false, right: false, fire: false };
+    inputRef.current.pid = { left: -1, right: -1, fire: -1 };
   };
 
   useEffect(() => {
@@ -187,7 +190,6 @@ export default function GalagaPage() {
     return copy.slice(0, MAX_RANK);
   }, [leaderboard]);
 
-  // ✅ 화면 폭에 맞춰 캔버스 표시 크기 계산
   useEffect(() => {
     const calc = () => {
       const vw = window.innerWidth;
@@ -223,9 +225,6 @@ export default function GalagaPage() {
     let enemies: Enemy[] = [];
     let explosions: Explosion[] = [];
     let powerUps: PowerUp[] = [];
-
-    // 키보드/모바일 버튼을 합친 최종 키 상태(로컬)
-    let keys = { left: false, right: false, fire: false };
 
     let fireCooldown = 0;
     let t = 0;
@@ -366,13 +365,7 @@ export default function GalagaPage() {
     const dropPowerUpMaybe = (x: number, y: number) => {
       const { powerDrop } = difficulty();
       if (Math.random() < powerDrop) {
-        powerUps.push({
-          x,
-          y,
-          vy: 2.4 + Math.random() * 0.8,
-          type: 'double',
-          alive: true,
-        });
+        powerUps.push({ x, y, vy: 2.4 + Math.random() * 0.8, type: 'double', alive: true });
       }
     };
 
@@ -390,11 +383,11 @@ export default function GalagaPage() {
       sfx.shoot();
     };
 
-    // 키보드
+    // 키보드 → ref에만 기록
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') keys.left = true;
-      if (e.key === 'ArrowRight') keys.right = true;
-      if (e.key === ' ') keys.fire = true;
+      if (e.key === 'ArrowLeft') inputRef.current.kb.left = true;
+      if (e.key === 'ArrowRight') inputRef.current.kb.right = true;
+      if (e.key === ' ') inputRef.current.kb.fire = true;
 
       if (e.key === 'Enter' || e.key === 'NumpadEnter') {
         const st = statusRef.current;
@@ -402,9 +395,9 @@ export default function GalagaPage() {
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') keys.left = false;
-      if (e.key === 'ArrowRight') keys.right = false;
-      if (e.key === ' ') keys.fire = false;
+      if (e.key === 'ArrowLeft') inputRef.current.kb.left = false;
+      if (e.key === 'ArrowRight') inputRef.current.kb.right = false;
+      if (e.key === ' ') inputRef.current.kb.fire = false;
     };
 
     window.addEventListener('keydown', onKeyDown);
@@ -413,19 +406,18 @@ export default function GalagaPage() {
     const loop = () => {
       rafRef.current = requestAnimationFrame(loop);
 
-      // ✅ 모바일 버튼 상태를 매 프레임 합산
-      const mk = mobileKeysRef.current;
+      // ✅ 매 프레임 “새로 계산”(누적 OR 금지)
       const st = statusRef.current;
-      if (st !== 'playing') {
-        // 게임 중이 아니면 이동/발사 입력은 무시
-        keys.fire = keys.fire && false;
-        keys.left = keys.left && false;
-        keys.right = keys.right && false;
-      } else {
-        keys.left = keys.left || mk.left;
-        keys.right = keys.right || mk.right;
-        keys.fire = keys.fire || mk.fire;
-      }
+      const mk = inputRef.current.mobile;
+      const kb = inputRef.current.kb;
+
+      const keys = st === 'playing'
+        ? {
+            left: kb.left || mk.left,
+            right: kb.right || mk.right,
+            fire: kb.fire || mk.fire,
+          }
+        : { left: false, right: false, fire: false };
 
       if (doubleShot && Date.now() > doubleShotUntil) {
         doubleShot = false;
@@ -437,7 +429,7 @@ export default function GalagaPage() {
       ctx.fillStyle = '#05060a';
       ctx.fillRect(0, 0, W, H);
 
-      // 별
+      // stars
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
       for (let i = 0; i < 26; i++) ctx.fillRect(((i * 97 + t * 2) % W), ((i * 193 + t * 3) % H), 2, 2);
 
@@ -455,7 +447,6 @@ export default function GalagaPage() {
         ctx.fillText(`DOUBLE x2 (${remain}s)`, 14, 44);
       }
 
-      // ready/over 안내
       if (!running && (st === 'ready' || st === 'over')) {
         ctx.fillStyle = '#ffffff';
         ctx.font = '16px ui-monospace, SFMono-Regular, Menlo, monospace';
@@ -472,33 +463,29 @@ export default function GalagaPage() {
       if (running) {
         const { diveEvery, maxDivers, rushChance } = difficulty();
 
-        // 이동
+        // move
         if (keys.left) player.x -= player.speed;
         if (keys.right) player.x += player.speed;
         player.x = clamp(player.x, player.w / 2, W - player.w / 2);
 
-        // 발사
+        // fire
         fireCooldown = Math.max(0, fireCooldown - 1);
         if (keys.fire && fireCooldown === 0) fireBullet();
 
-        // 총알
-        bullets = bullets
-          .map((b) => ({ ...b, x: b.x + b.vx, y: b.y + b.vy }))
-          .filter((b) => b.y > -40);
+        // bullets
+        bullets = bullets.map((b) => ({ ...b, x: b.x + b.vx, y: b.y + b.vy })).filter((b) => b.y > -40);
 
-        // 다이브 이벤트
+        // dive events
         t += 1;
         const sway = Math.sin(t / 60) * 0.8;
 
         if (t % diveEvery === 0) {
           const isRush = Math.random() < rushChance;
-          const count = isRush
-            ? clamp(Math.floor(maxDivers * 1.6), 2, 8)
-            : clamp(1 + Math.floor(Math.random() * maxDivers), 1, maxDivers);
+          const count = isRush ? clamp(Math.floor(maxDivers * 1.6), 2, 8) : clamp(1 + Math.floor(Math.random() * maxDivers), 1, maxDivers);
           startDives(count);
         }
 
-        // 적
+        // enemies
         enemies.forEach((e, idx) => {
           if (!e.alive) return;
 
@@ -520,22 +507,13 @@ export default function GalagaPage() {
           }
         });
 
-        // 파워업
+        // powerups
         powerUps.forEach((p) => {
           if (!p.alive) return;
           p.y += p.vy;
           if (p.y > H + 30) p.alive = false;
 
-          const hit = rectHit(
-            player.x - player.w / 2,
-            player.y - player.h / 2,
-            player.w,
-            player.h,
-            p.x - 10,
-            p.y - 10,
-            20,
-            20
-          );
+          const hit = rectHit(player.x - player.w / 2, player.y - player.h / 2, player.w, player.h, p.x - 10, p.y - 10, 20, 20);
           if (hit) {
             p.alive = false;
             doubleShot = true;
@@ -545,17 +523,15 @@ export default function GalagaPage() {
         });
         powerUps = powerUps.filter((p) => p.alive);
 
-        // 총알 vs 적
+        // bullet vs enemy
         for (const b of bullets) {
           for (const e of enemies) {
             if (!e.alive) continue;
             if (rectHit(b.x - b.r, b.y - b.r, b.r * 2, b.r * 2, e.x - e.w / 2, e.y - e.h / 2, e.w, e.h)) {
               e.alive = false;
               b.y = -9999;
-
               localScore += 100 + (localStage - 1) * 10;
               setScore(localScore);
-
               explosions.push({ x: e.x, y: e.y, t: 0 });
               sfx.hit();
               dropPowerUpMaybe(e.x, e.y);
@@ -565,7 +541,7 @@ export default function GalagaPage() {
         }
         bullets = bullets.filter((b) => b.y > -1000);
 
-        // 적 vs 플레이어
+        // enemy vs player
         for (const e of enemies) {
           if (!e.alive) continue;
           if (rectHit(player.x - player.w / 2, player.y - player.h / 2, player.w, player.h, e.x - e.w / 2, e.y - e.h / 2, e.w, e.h)) {
@@ -575,11 +551,10 @@ export default function GalagaPage() {
           }
         }
 
-        // 스테이지 클리어
         if (enemies.length > 0 && enemies.every((e) => !e.alive)) nextStage();
       }
 
-      // 폭발
+      // explosions
       explosions = explosions.map((ex) => ({ ...ex, t: ex.t + 1 })).filter((ex) => ex.t < 18);
       for (const ex of explosions) {
         const r = ex.t * 2.2;
@@ -589,7 +564,7 @@ export default function GalagaPage() {
         ctx.stroke();
       }
 
-      // 플레이어
+      // player
       ctx.fillStyle = '#34d399';
       ctx.beginPath();
       ctx.moveTo(player.x, player.y - 14);
@@ -598,7 +573,7 @@ export default function GalagaPage() {
       ctx.closePath();
       ctx.fill();
 
-      // 총알
+      // bullets draw
       ctx.fillStyle = '#fbbf24';
       for (const b of bullets) {
         ctx.beginPath();
@@ -606,7 +581,7 @@ export default function GalagaPage() {
         ctx.fill();
       }
 
-      // 파워업
+      // powerup draw
       for (const p of powerUps) {
         ctx.fillStyle = 'rgba(250, 204, 21, 0.95)';
         ctx.beginPath();
@@ -618,7 +593,7 @@ export default function GalagaPage() {
         ctx.fillText('x2', p.x - 8, p.y + 3);
       }
 
-      // 적
+      // enemies draw
       for (const e of enemies) {
         if (!e.alive) continue;
         ctx.fillStyle = e.diving ? '#fb7185' : '#60a5fa';
@@ -627,13 +602,9 @@ export default function GalagaPage() {
         ctx.fillRect(e.x - 6, e.y - 3, 12, 6);
       }
 
-      // 프레임
+      // frame
       ctx.strokeStyle = 'rgba(255,255,255,0.15)';
       ctx.strokeRect(10, 40, W - 20, H - 60);
-
-      // ✅ 다음 프레임을 위해 키보드키는 유지되지만, 모바일키는 버튼up에서 끄는 방식이라 그대로 둠
-      // keys는 키보드 상태가 남아있을 수 있어, 모바일키와 OR 처리한 뒤 다음 프레임에서도 키보드는 유지됨(의도)
-      // (모바일키는 ref에서 관리)
     };
 
     loop();
@@ -643,19 +614,14 @@ export default function GalagaPage() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [sfx]);
 
-  // -------------------- SUBMIT SCORE --------------------
+  // -------------------- SCORE SUBMIT --------------------
   const submitScore = () => {
     const safe = sanitizeName(nameInput);
-    if (!safe || safe.length < 1) return;
+    if (!safe) return;
 
-    const row: RankRow = {
-      name: safe,
-      score,
-      date: new Date().toISOString(),
-    };
+    const row: RankRow = { name: safe, score, date: new Date().toISOString() };
 
     const next = [...leaderboard, row]
       .sort((a, b) => (b.score - a.score) || (new Date(b.date).getTime() - new Date(a.date).getTime()))
@@ -664,24 +630,56 @@ export default function GalagaPage() {
     saveLeaderboard(next);
     setNameInput('');
     setStatusSafe('over');
-
-    // 모달 닫힐 때 혹시 눌린 키 남아있으면 초기화
     clearMobileKeys();
   };
 
   const resetRanking = () => saveLeaderboard([]);
 
+  // ✅ START 버튼은 키 이벤트 디스패치 대신 “상태 기반”으로 처리하기 위해 Enter를 보내는 대신
+  // ready/over 상태에서만 Enter를 보내면 됨(간단/안정)
   const startByButton = async () => {
     await sfx.unlock();
-    // 게임은 엔진 내부 start가 처리하지만, UI상에서 ready/over일 때만 의미
-    // ENTER 대신 안내: 캔버스는 텍스트만 표시되고, 실제 시작은 키보드 Enter 또는 버튼으로 트리거가 필요
-    // 그래서 간단히 상태를 건드리지 않고, "키보드 없는 환경"을 위해: 가짜 Enter 이벤트 대신,
-    // submit 모달 아닐 때 ready/over면 페이지 리로드 없이 시작하도록 'keydown Enter'를 디스패치.
-    // (가장 간단하게 기존 start 로직을 타게 함)
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    const st = statusRef.current;
+    if (st === 'ready' || st === 'over') {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    }
   };
 
-  // 공통 버튼 스타일
+  // ✅ 버튼 핸들러: pointer capture로 멀티터치 안정화
+  const bindHold = (key: 'left' | 'right' | 'fire') => {
+    return {
+      onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        sfx.unlock();
+        // 이미 이 버튼이 다른 포인터에 의해 눌렸다면 무시(중복 방지)
+        if (inputRef.current.pid[key] !== -1) return;
+
+        inputRef.current.pid[key] = e.pointerId;
+        inputRef.current.mobile[key] = true;
+
+        // ✅ 캡처: 손가락이 살짝 움직여도 업 이벤트를 이 버튼이 받음
+        e.currentTarget.setPointerCapture(e.pointerId);
+      },
+      onPointerUp: (e: React.PointerEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        if (inputRef.current.pid[key] === e.pointerId) {
+          inputRef.current.pid[key] = -1;
+          inputRef.current.mobile[key] = false;
+          try {
+            e.currentTarget.releasePointerCapture(e.pointerId);
+          } catch {}
+        }
+      },
+      onPointerCancel: (e: React.PointerEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        if (inputRef.current.pid[key] === e.pointerId) {
+          inputRef.current.pid[key] = -1;
+          inputRef.current.mobile[key] = false;
+        }
+      },
+    };
+  };
+
   const padBtn =
     'select-none touch-none rounded-2xl px-4 py-4 font-mono text-base shadow-[0_0_0_1px_rgba(255,255,255,0.10)] active:scale-[0.98] transition';
 
@@ -697,7 +695,12 @@ export default function GalagaPage() {
       <div className="w-full max-w-[520px] grid grid-cols-1 sm:grid-cols-[1fr_240px] gap-3 sm:gap-4 items-start">
         {/* GAME */}
         <div className="rounded-2xl p-3 bg-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.08)]">
-          <canvas ref={canvasRef} className="rounded-xl block" style={{ width: `${viewSize.w}px`, height: `${viewSize.h}px` }} />
+          <canvas
+            ref={canvasRef}
+            className="rounded-xl block"
+            style={{ width: `${viewSize.w}px`, height: `${viewSize.h}px` }}
+          />
+
           <div className="mt-3 flex items-center justify-between text-xs font-mono opacity-80">
             <div>SCORE: {score}</div>
             <div>STAGE: {stage}</div>
@@ -706,46 +709,25 @@ export default function GalagaPage() {
 
           {/* ✅ 모바일 조작 패드 */}
           <div className="mt-3 grid grid-cols-4 gap-2">
-            <button
-              onClick={startByButton}
-              className={`${padBtn} col-span-1 bg-emerald-600/80 hover:bg-emerald-600`}
-            >
+            <button onClick={startByButton} className={`${padBtn} col-span-1 bg-emerald-600/80 hover:bg-emerald-600`}>
               START
             </button>
 
-            <button
-              className={`${padBtn} bg-white/10`}
-              onPointerDown={() => setMobileKey('left', true)}
-              onPointerUp={() => setMobileKey('left', false)}
-              onPointerCancel={() => setMobileKey('left', false)}
-              onPointerLeave={() => setMobileKey('left', false)}
-            >
+            <button className={`${padBtn} bg-white/10`} {...bindHold('left')}>
               ←
             </button>
 
-            <button
-              className={`${padBtn} bg-amber-500/80 hover:bg-amber-500 text-black`}
-              onPointerDown={() => setMobileKey('fire', true)}
-              onPointerUp={() => setMobileKey('fire', false)}
-              onPointerCancel={() => setMobileKey('fire', false)}
-              onPointerLeave={() => setMobileKey('fire', false)}
-            >
+            <button className={`${padBtn} bg-amber-500/80 hover:bg-amber-500 text-black`} {...bindHold('fire')}>
               FIRE
             </button>
 
-            <button
-              className={`${padBtn} bg-white/10`}
-              onPointerDown={() => setMobileKey('right', true)}
-              onPointerUp={() => setMobileKey('right', false)}
-              onPointerCancel={() => setMobileKey('right', false)}
-              onPointerLeave={() => setMobileKey('right', false)}
-            >
+            <button className={`${padBtn} bg-white/10`} {...bindHold('right')}>
               →
             </button>
           </div>
 
           <div className="mt-2 text-[11px] font-mono opacity-60 leading-relaxed">
-            * 모바일: 아래 버튼을 누르고 있으면 계속 이동/연사합니다.<br />
+            * 모바일: ←/→ 누른 채로 FIRE도 동시에 누를 수 있습니다(멀티터치 OK).<br />
             * 보너스: 적 처치 시 가끔 x2 드롭 → 먹으면 20초간 2발 발사
           </div>
         </div>
