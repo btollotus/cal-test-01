@@ -17,7 +17,6 @@ type Enemy = {
   homeX: number;
   homeY: number;
 
-  // 다이브 중 목표값/패턴
   diveVX: number;
   diveSpeed: number;
   diveAmp: number;
@@ -44,6 +43,10 @@ const STORAGE_KEY = 'jdg_galaga_leaderboard_v1';
 const MAX_NAME_LEN = 5;
 const MAX_RANK = 20;
 
+// 기준 캔버스(게임 로직은 이 좌표계로 동작)
+const BASE_W = 420;
+const BASE_H = 700;
+
 function clamp(n: number, a: number, b: number) {
   return Math.max(a, Math.min(b, n));
 }
@@ -58,10 +61,16 @@ function formatKST(iso: string) {
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
 }
 
+/**
+ * ✅ 한글 5자까지 확실히
+ * - 공백 제거
+ * - 허용: 한글/영문/숫자/_-
+ * - 길이: 최대 5 "글자" (JS는 한글도 1글자=1 length)
+ */
 function sanitizeName(input: string) {
-  const trimmed = input.replace(/\s+/g, '').slice(0, MAX_NAME_LEN);
-  const ok = trimmed.replace(/[^0-9A-Za-z가-힣_-]/g, '');
-  return ok.slice(0, MAX_NAME_LEN);
+  const noSpace = input.replace(/\s+/g, '');
+  const only = noSpace.replace(/[^0-9A-Za-z가-힣_-]/g, '');
+  return only.slice(0, MAX_NAME_LEN);
 }
 
 /** 외부 파일 없이 효과음(오실레이터) */
@@ -125,7 +134,6 @@ function useSfx() {
       beep(880, 0.05, 'square', 0.06);
       setTimeout(() => beep(988, 0.05, 'square', 0.06), 60);
     };
-
     return { unlock, shoot, hit, dead, clear, power };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -136,6 +144,9 @@ function useSfx() {
 export default function GalagaPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
+
+  // ✅ 모바일 반응형: 캔버스 실제 표시 크기(px)
+  const [viewSize, setViewSize] = useState({ w: BASE_W, h: BASE_H });
 
   const sfx = useSfx();
 
@@ -153,7 +164,6 @@ export default function GalagaPage() {
   const [nameInput, setNameInput] = useState('');
   const [leaderboard, setLeaderboard] = useState<RankRow[]>([]);
 
-  // 로컬스토리지 로딩
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -176,6 +186,21 @@ export default function GalagaPage() {
     return copy.slice(0, MAX_RANK);
   }, [leaderboard]);
 
+  // ✅ 화면 폭에 맞춰 캔버스 표시 크기 계산 (갤럭시 포함)
+  useEffect(() => {
+    const calc = () => {
+      // 화면 양 옆 여백 고려 (p-6 등)
+      const vw = window.innerWidth;
+      const maxW = Math.min(520, vw - 24); // 12px*2 정도 안전
+      const w = Math.max(320, Math.min(BASE_W, maxW));
+      const h = Math.round((w / BASE_W) * BASE_H);
+      setViewSize({ w, h });
+    };
+    calc();
+    window.addEventListener('resize', calc);
+    return () => window.removeEventListener('resize', calc);
+  }, []);
+
   // -------------------- GAME LOOP --------------------
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -183,16 +208,16 @@ export default function GalagaPage() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // ✅ 내부 해상도는 BASE 좌표계로 고정 (로직 안정)
     const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
-    const W = 420;
-    const H = 700;
-    canvas.style.width = `${W}px`;
-    canvas.style.height = `${H}px`;
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
+    canvas.width = BASE_W * dpr;
+    canvas.height = BASE_H * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     let running = false;
+
+    const W = BASE_W;
+    const H = BASE_H;
 
     const player = { x: W / 2, y: H - 70, w: 34, h: 22, speed: 5 };
     let bullets: Bullet[] = [];
@@ -208,29 +233,17 @@ export default function GalagaPage() {
     let localScore = 0;
     let localLives = 3;
 
-    // ✅ 보너스: 더블샷
     let doubleShot = false;
-    let doubleShotUntil = 0; // timestamp(ms)
+    let doubleShotUntil = 0;
     const DOUBLE_SHOT_DURATION_MS = 20000;
 
     const difficulty = () => {
-      // 다이브 이벤트 주기(낮을수록 자주)
       const diveEvery = Math.max(55, 230 - (localStage - 1) * 16);
-      // 다이브 기본 속도
       const baseDiveSpeed = 2.8 + (localStage - 1) * 0.28;
-
-      // 동시에 다이브 가능한 최대 수
       const maxDivers = clamp(1 + Math.floor((localStage - 1) / 2), 1, 6);
-
-      // 가끔 러시(다수 동시)
       const rushChance = clamp(0.06 + (localStage - 1) * 0.01, 0.06, 0.18);
-
-      // 플레이어 발사 쿨다운
       const fireCd = Math.max(6, 10 - Math.floor((localStage - 1) / 2));
-
-      // 파워업 드롭 확률(너무 높으면 쉬움)
-      const powerDrop = clamp(0.10, 0.08, 0.12); // 고정 근처(취향)
-
+      const powerDrop = 0.10;
       return { diveEvery, baseDiveSpeed, maxDivers, rushChance, fireCd, powerDrop };
     };
 
@@ -254,13 +267,10 @@ export default function GalagaPage() {
             w: 26,
             h: 18,
             alive: true,
-
             diving: false,
             diveT: 0,
-
             homeX: x,
             homeY: y,
-
             diveVX: 0,
             diveSpeed: 3,
             diveAmp: 2.2,
@@ -278,30 +288,6 @@ export default function GalagaPage() {
       setScore(localScore);
       setStage(localStage);
       setLives(localLives);
-    };
-
-    const resetAll = () => {
-      bullets = [];
-      enemies = [];
-      explosions = [];
-      powerUps = [];
-
-      keys = { left: false, right: false, fire: false };
-      fireCooldown = 0;
-      t = 0;
-
-      localStage = 1;
-      localScore = 0;
-      localLives = 3;
-
-      doubleShot = false;
-      doubleShotUntil = 0;
-
-      player.x = W / 2;
-
-      running = false;
-      setStatusSafe('ready');
-      syncUI();
     };
 
     const start = async () => {
@@ -322,7 +308,6 @@ export default function GalagaPage() {
           doubleShotUntil = 0;
           player.x = W / 2;
         }
-
         spawnFormation();
         setStatusSafe('playing');
         running = true;
@@ -342,7 +327,6 @@ export default function GalagaPage() {
       setLives(localLives);
       sfx.dead();
 
-      // ✅ 목숨 잃으면 보너스 해제(아케이드 느낌)
       doubleShot = false;
       doubleShotUntil = 0;
 
@@ -356,38 +340,30 @@ export default function GalagaPage() {
       }
     };
 
-    // ✅ 여러 대 다이브 시작시키기
     const startDives = (count: number) => {
       const alive = enemies.filter((e) => e.alive && !e.diving);
       if (alive.length === 0) return;
 
-      // count 만큼 랜덤으로 뽑기
       const picks: Enemy[] = [];
       for (let i = 0; i < count; i++) {
         if (alive.length === 0) break;
         const idx = Math.floor(Math.random() * alive.length);
-        const e = alive.splice(idx, 1)[0];
-        picks.push(e);
+        picks.push(alive.splice(idx, 1)[0]);
       }
 
       const { baseDiveSpeed } = difficulty();
       for (const e of picks) {
         e.diving = true;
         e.diveT = 0;
-
-        // 랜덤 패턴값 부여 (각자 다른 궤적)
         e.diveSpeed = baseDiveSpeed * (0.9 + Math.random() * 0.35);
         e.diveAmp = 1.6 + Math.random() * 3.0;
         e.diveFreq = 8 + Math.floor(Math.random() * 8);
-
-        // 좌우 드리프트(너무 심하면 탈선하니 약하게)
         e.diveVX = (Math.random() - 0.5) * 1.2;
       }
     };
 
     const dropPowerUpMaybe = (x: number, y: number) => {
       const { powerDrop } = difficulty();
-      // 확률 드롭
       if (Math.random() < powerDrop) {
         powerUps.push({
           x,
@@ -401,10 +377,8 @@ export default function GalagaPage() {
 
     const fireBullet = () => {
       const { fireCd } = difficulty();
-
       fireCooldown = fireCd;
 
-      // 더블샷 상태면 2발
       if (doubleShot) {
         bullets.push({ x: player.x - 6, y: player.y - 18, vy: -8.6, r: 3, vx: -0.35 });
         bullets.push({ x: player.x + 6, y: player.y - 18, vy: -8.6, r: 3, vx: 0.35 });
@@ -415,7 +389,44 @@ export default function GalagaPage() {
       sfx.shoot();
     };
 
-    // 입력 처리
+    // ✅ 모바일 터치 조작(추가)
+    // - 화면 왼쪽: 왼쪽 이동, 오른쪽: 오른쪽 이동
+    // - 하단 35% 영역 탭: 발사 (누르고 있으면 연사)
+    const pointerToGame = (clientX: number, clientY: number) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = ((clientX - rect.left) / rect.width) * W;
+      const y = ((clientY - rect.top) / rect.height) * H;
+      return { x, y };
+    };
+
+    const onPointerDown = (e: PointerEvent) => {
+      sfx.unlock();
+      const { x, y } = pointerToGame(e.clientX, e.clientY);
+
+      // submit 모달이면 무시
+      if (statusRef.current === 'submit') return;
+
+      // ready/over면 탭으로 시작도 가능
+      if (statusRef.current === 'ready' || statusRef.current === 'over') {
+        start();
+        return;
+      }
+
+      if (y > H * 0.65) {
+        keys.fire = true;
+      } else {
+        keys.left = x < W / 2;
+        keys.right = x >= W / 2;
+      }
+    };
+
+    const onPointerUp = () => {
+      keys.left = false;
+      keys.right = false;
+      keys.fire = false;
+    };
+
+    // 키보드 입력
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft') keys.left = true;
       if (e.key === 'ArrowRight') keys.right = true;
@@ -434,11 +445,13 @@ export default function GalagaPage() {
 
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    canvas.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
 
     const loop = () => {
       rafRef.current = requestAnimationFrame(loop);
 
-      // 더블샷 만료 체크
       if (doubleShot && Date.now() > doubleShotUntil) {
         doubleShot = false;
         doubleShotUntil = 0;
@@ -453,14 +466,13 @@ export default function GalagaPage() {
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
       for (let i = 0; i < 26; i++) ctx.fillRect(((i * 97 + t * 2) % W), ((i * 193 + t * 3) % H), 2, 2);
 
-      // HUD (상단)
+      // HUD
       ctx.fillStyle = '#e5e7eb';
       ctx.font = '14px ui-monospace, SFMono-Regular, Menlo, monospace';
       ctx.fillText(`SCORE ${localScore}`, 14, 24);
       ctx.fillText(`STAGE ${localStage}`, W / 2 - 40, 24);
       ctx.fillText(`LIVES ${localLives}`, W - 110, 24);
 
-      // 더블샷 표시
       if (doubleShot) {
         const remain = Math.max(0, Math.ceil((doubleShotUntil - Date.now()) / 1000));
         ctx.fillStyle = 'rgba(255,255,255,0.85)';
@@ -468,44 +480,38 @@ export default function GalagaPage() {
         ctx.fillText(`DOUBLE x2 (${remain}s)`, 14, 44);
       }
 
-      // ready/over 안내
       const st = statusRef.current;
       if (!running && (st === 'ready' || st === 'over')) {
         ctx.fillStyle = '#ffffff';
         ctx.font = '16px ui-monospace, SFMono-Regular, Menlo, monospace';
-        const msg = st === 'over' ? 'GAME OVER - PRESS ENTER' : 'PRESS ENTER TO START';
-        const w = ctx.measureText(msg).width;
-
-        // 박스 느낌
-        const bx = (W - w) / 2 - 16;
+        const msg = st === 'over' ? 'GAME OVER - TAP/ENTER' : 'TAP/ENTER TO START';
+        const mw = ctx.measureText(msg).width;
+        const bx = (W - mw) / 2 - 16;
         const by = H / 2 - 22;
         ctx.strokeStyle = 'rgba(150,255,80,0.85)';
         ctx.lineWidth = 2;
-        ctx.strokeRect(bx, by, w + 32, 44);
-
-        ctx.fillText(msg, (W - w) / 2, H / 2 + 5);
+        ctx.strokeRect(bx, by, mw + 32, 44);
+        ctx.fillText(msg, (W - mw) / 2, H / 2 + 5);
       }
 
       if (running) {
         const { diveEvery, maxDivers, rushChance } = difficulty();
 
-        // 플레이어 이동
+        // 이동
         if (keys.left) player.x -= player.speed;
         if (keys.right) player.x += player.speed;
         player.x = clamp(player.x, player.w / 2, W - player.w / 2);
 
         // 발사
         fireCooldown = Math.max(0, fireCooldown - 1);
-        if (keys.fire && fireCooldown === 0) {
-          fireBullet();
-        }
+        if (keys.fire && fireCooldown === 0) fireBullet();
 
-        // 총알 업데이트
+        // 총알
         bullets = bullets
           .map((b) => ({ ...b, x: b.x + b.vx, y: b.y + b.vy }))
           .filter((b) => b.y > -40);
 
-        // ✅ 다이브 이벤트: 일정 주기마다 1~N대 랜덤 + 가끔 러시
+        // 다이브 이벤트
         t += 1;
         const sway = Math.sin(t / 60) * 0.8;
 
@@ -514,7 +520,6 @@ export default function GalagaPage() {
           const count = isRush
             ? clamp(Math.floor(maxDivers * 1.6), 2, 8)
             : clamp(1 + Math.floor(Math.random() * maxDivers), 1, maxDivers);
-
           startDives(count);
         }
 
@@ -527,12 +532,8 @@ export default function GalagaPage() {
             e.y = e.homeY + Math.sin((t + idx) / 80) * 0.2;
           } else {
             e.diveT += 1;
-
-            // 내려오면서 사인 + 드리프트
             e.y += e.diveSpeed;
             e.x += e.diveVX + Math.sin((e.diveT + idx) / e.diveFreq) * e.diveAmp;
-
-            // 화면 밖으로 너무 벗어나면 살짝 되돌림
             e.x = clamp(e.x, 20, W - 20);
 
             if (e.y > H + 40) {
@@ -544,13 +545,12 @@ export default function GalagaPage() {
           }
         });
 
-        // ✅ 파워업 업데이트(떨어짐)
+        // 파워업 업데이트
         powerUps.forEach((p) => {
           if (!p.alive) return;
           p.y += p.vy;
           if (p.y > H + 30) p.alive = false;
 
-          // 플레이어와 충돌 시 획득
           const hit = rectHit(
             player.x - player.w / 2,
             player.y - player.h / 2,
@@ -570,22 +570,11 @@ export default function GalagaPage() {
         });
         powerUps = powerUps.filter((p) => p.alive);
 
-        // 충돌: 총알 vs 적
+        // 총알 vs 적
         for (const b of bullets) {
           for (const e of enemies) {
             if (!e.alive) continue;
-            if (
-              rectHit(
-                b.x - b.r,
-                b.y - b.r,
-                b.r * 2,
-                b.r * 2,
-                e.x - e.w / 2,
-                e.y - e.h / 2,
-                e.w,
-                e.h
-              )
-            ) {
+            if (rectHit(b.x - b.r, b.y - b.r, b.r * 2, b.r * 2, e.x - e.w / 2, e.y - e.h / 2, e.w, e.h)) {
               e.alive = false;
               b.y = -9999;
 
@@ -594,31 +583,17 @@ export default function GalagaPage() {
 
               explosions.push({ x: e.x, y: e.y, t: 0 });
               sfx.hit();
-
-              // ✅ 파워업 드롭(가끔)
               dropPowerUpMaybe(e.x, e.y);
-
               break;
             }
           }
         }
         bullets = bullets.filter((b) => b.y > -1000);
 
-        // 충돌: 적 vs 플레이어
+        // 적 vs 플레이어
         for (const e of enemies) {
           if (!e.alive) continue;
-          if (
-            rectHit(
-              player.x - player.w / 2,
-              player.y - player.h / 2,
-              player.w,
-              player.h,
-              e.x - e.w / 2,
-              e.y - e.h / 2,
-              e.w,
-              e.h
-            )
-          ) {
+          if (rectHit(player.x - player.w / 2, player.y - player.h / 2, player.w, player.h, e.x - e.w / 2, e.y - e.h / 2, e.w, e.h)) {
             e.alive = false;
             loseLife();
             break;
@@ -626,12 +601,10 @@ export default function GalagaPage() {
         }
 
         // 스테이지 클리어
-        if (enemies.length > 0 && enemies.every((e) => !e.alive)) {
-          nextStage();
-        }
+        if (enemies.length > 0 && enemies.every((e) => !e.alive)) nextStage();
       }
 
-      // 폭발 이펙트
+      // 폭발
       explosions = explosions.map((ex) => ({ ...ex, t: ex.t + 1 })).filter((ex) => ex.t < 18);
       for (const ex of explosions) {
         const r = ex.t * 2.2;
@@ -641,7 +614,7 @@ export default function GalagaPage() {
         ctx.stroke();
       }
 
-      // DRAW: 플레이어
+      // 플레이어
       ctx.fillStyle = '#34d399';
       ctx.beginPath();
       ctx.moveTo(player.x, player.y - 14);
@@ -650,7 +623,7 @@ export default function GalagaPage() {
       ctx.closePath();
       ctx.fill();
 
-      // DRAW: 총알
+      // 총알
       ctx.fillStyle = '#fbbf24';
       for (const b of bullets) {
         ctx.beginPath();
@@ -658,9 +631,9 @@ export default function GalagaPage() {
         ctx.fill();
       }
 
-      // DRAW: 파워업
+      // 파워업
       for (const p of powerUps) {
-        ctx.fillStyle = 'rgba(250, 204, 21, 0.95)'; // amber
+        ctx.fillStyle = 'rgba(250, 204, 21, 0.95)';
         ctx.beginPath();
         ctx.arc(p.x, p.y, 9, 0, Math.PI * 2);
         ctx.fill();
@@ -670,7 +643,7 @@ export default function GalagaPage() {
         ctx.fillText('x2', p.x - 8, p.y + 3);
       }
 
-      // DRAW: 적
+      // 적
       for (const e of enemies) {
         if (!e.alive) continue;
         ctx.fillStyle = e.diving ? '#fb7185' : '#60a5fa';
@@ -690,6 +663,9 @@ export default function GalagaPage() {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -714,39 +690,34 @@ export default function GalagaPage() {
     setStatusSafe('over');
   };
 
-  const resetRanking = () => {
-    saveLeaderboard([]);
-  };
+  const resetRanking = () => saveLeaderboard([]);
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center gap-4 p-6">
-      <div className="w-full max-w-[520px] flex items-center justify-between">
+    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-start gap-3 p-3 sm:p-6">
+      <div className="w-full max-w-[520px] flex items-center justify-between pt-2">
         <Link href="/" className="text-sm font-mono opacity-80 hover:opacity-100">
           ← HOME
         </Link>
-        <div className="text-sm font-mono opacity-80">← → 이동 / SPACE 발사 / ENTER 시작</div>
+        <div className="text-[12px] sm:text-sm font-mono opacity-80">← → 이동 / SPACE 발사 / TAP/ENTER 시작</div>
       </div>
 
-      <div className="w-full max-w-[520px] grid grid-cols-1 md:grid-cols-[1fr_240px] gap-4 items-start">
+      {/* ✅ 모바일: 세로, 데스크탑: 가로 */}
+      <div className="w-full max-w-[520px] grid grid-cols-1 sm:grid-cols-[1fr_240px] gap-3 sm:gap-4 items-start">
         {/* GAME */}
         <div className="rounded-2xl p-3 bg-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.08)]">
           <canvas
             ref={canvasRef}
-            className="rounded-xl"
-            onPointerDown={() => {
-              sfx.unlock();
-            }}
+            className="rounded-xl block"
+            style={{ width: `${viewSize.w}px`, height: `${viewSize.h}px` }}
           />
           <div className="mt-3 flex items-center justify-between text-xs font-mono opacity-80">
             <div>SCORE: {score}</div>
             <div>STAGE: {stage}</div>
             <div>LIVES: {lives}</div>
           </div>
-          <div className="mt-2 text-xs font-mono opacity-60">
-            * 효과음이 안 나면 화면을 한 번 클릭/키입력(ENTER) 후 시작하세요(브라우저 정책).
-          </div>
-          <div className="mt-1 text-xs font-mono opacity-60">
-            * 보너스: 적 처치 시 가끔 x2(더블샷) 드롭 → 먹으면 20초간 2발 발사
+          <div className="mt-2 text-[11px] font-mono opacity-60 leading-relaxed">
+            * 모바일: 화면 상단 좌/우 터치로 이동, 하단 터치로 발사(누르면 연사)<br />
+            * 보너스: 적 처치 시 가끔 x2 드롭 → 먹으면 20초간 2발 발사
           </div>
         </div>
 
@@ -783,14 +754,14 @@ export default function GalagaPage() {
           </div>
 
           <div className="mt-4 text-[11px] font-mono opacity-60">
-            이름: 한/영/숫자 가능, 5글자 이내
+            이름: 한글/영문/숫자 가능, 5글자 이내
           </div>
         </div>
       </div>
 
       {/* SUBMIT MODAL */}
       {status === 'submit' && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 p-6">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-sm rounded-2xl bg-zinc-900 p-5 shadow-2xl">
             <div className="font-mono text-lg">GAME OVER</div>
             <div className="mt-2 font-mono text-sm opacity-80">
@@ -798,16 +769,22 @@ export default function GalagaPage() {
             </div>
 
             <div className="mt-4">
-              <label className="block text-xs font-mono opacity-70 mb-2">이름 입력 (최대 5글자)</label>
+              <label className="block text-xs font-mono opacity-70 mb-2">이름 입력 (한글 5자까지)</label>
               <input
                 autoFocus
                 value={nameInput}
+                maxLength={MAX_NAME_LEN}
+                inputMode="text"
+                enterKeyHint="done"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
                 onChange={(e) => setNameInput(sanitizeName(e.target.value))}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === 'NumpadEnter') submitScore();
                 }}
-                placeholder="예) JDg"
-                className="w-full rounded-lg bg-black/40 px-3 py-3 text-sm font-mono outline-none ring-1 ring-white/10 focus:ring-white/20"
+                placeholder="예) 홍길동"
+                className="w-full rounded-lg bg-black/40 px-3 py-3 text-base font-mono outline-none ring-1 ring-white/10 focus:ring-white/20"
               />
               <div className="mt-1 text-[11px] font-mono opacity-60">
                 현재: {sanitizeName(nameInput).length}/{MAX_NAME_LEN}
@@ -833,8 +810,9 @@ export default function GalagaPage() {
               </button>
             </div>
 
-            <div className="mt-3 text-[11px] font-mono opacity-60">
-              저장 후 랭킹에 #1부터 표시됩니다.
+            <div className="mt-3 text-[11px] font-mono opacity-60 leading-relaxed">
+              모바일에서도 한글 입력 가능합니다.<br />
+              (키보드가 안 뜨면 입력창을 한 번 더 탭하세요)
             </div>
           </div>
         </div>
