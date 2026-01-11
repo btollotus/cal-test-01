@@ -43,7 +43,6 @@ const STORAGE_KEY = 'jdg_galaga_leaderboard_v1';
 const MAX_NAME_LEN = 5;
 const MAX_RANK = 20;
 
-// 기준 캔버스(게임 로직은 이 좌표계로 동작)
 const BASE_W = 420;
 const BASE_H = 700;
 
@@ -61,12 +60,6 @@ function formatKST(iso: string) {
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
 }
 
-/**
- * ✅ 한글 5자까지 확실히
- * - 공백 제거
- * - 허용: 한글/영문/숫자/_-
- * - 길이: 최대 5 "글자" (JS는 한글도 1글자=1 length)
- */
 function sanitizeName(input: string) {
   const noSpace = input.replace(/\s+/g, '');
   const only = noSpace.replace(/[^0-9A-Za-z가-힣_-]/g, '');
@@ -145,7 +138,6 @@ export default function GalagaPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
 
-  // ✅ 모바일 반응형: 캔버스 실제 표시 크기(px)
   const [viewSize, setViewSize] = useState({ w: BASE_W, h: BASE_H });
 
   const sfx = useSfx();
@@ -163,6 +155,15 @@ export default function GalagaPage() {
 
   const [nameInput, setNameInput] = useState('');
   const [leaderboard, setLeaderboard] = useState<RankRow[]>([]);
+
+  // ✅ 모바일 버튼용 키 상태를 ref로 들고 있음(게임루프는 1번만 등록되므로)
+  const mobileKeysRef = useRef({ left: false, right: false, fire: false });
+  const setMobileKey = (k: 'left' | 'right' | 'fire', v: boolean) => {
+    mobileKeysRef.current[k] = v;
+  };
+  const clearMobileKeys = () => {
+    mobileKeysRef.current = { left: false, right: false, fire: false };
+  };
 
   useEffect(() => {
     try {
@@ -186,12 +187,11 @@ export default function GalagaPage() {
     return copy.slice(0, MAX_RANK);
   }, [leaderboard]);
 
-  // ✅ 화면 폭에 맞춰 캔버스 표시 크기 계산 (갤럭시 포함)
+  // ✅ 화면 폭에 맞춰 캔버스 표시 크기 계산
   useEffect(() => {
     const calc = () => {
-      // 화면 양 옆 여백 고려 (p-6 등)
       const vw = window.innerWidth;
-      const maxW = Math.min(520, vw - 24); // 12px*2 정도 안전
+      const maxW = Math.min(520, vw - 24);
       const w = Math.max(320, Math.min(BASE_W, maxW));
       const h = Math.round((w / BASE_W) * BASE_H);
       setViewSize({ w, h });
@@ -208,7 +208,6 @@ export default function GalagaPage() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // ✅ 내부 해상도는 BASE 좌표계로 고정 (로직 안정)
     const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
     canvas.width = BASE_W * dpr;
     canvas.height = BASE_H * dpr;
@@ -225,7 +224,9 @@ export default function GalagaPage() {
     let explosions: Explosion[] = [];
     let powerUps: PowerUp[] = [];
 
+    // 키보드/모바일 버튼을 합친 최종 키 상태(로컬)
     let keys = { left: false, right: false, fire: false };
+
     let fireCooldown = 0;
     let t = 0;
 
@@ -389,44 +390,7 @@ export default function GalagaPage() {
       sfx.shoot();
     };
 
-    // ✅ 모바일 터치 조작(추가)
-    // - 화면 왼쪽: 왼쪽 이동, 오른쪽: 오른쪽 이동
-    // - 하단 35% 영역 탭: 발사 (누르고 있으면 연사)
-    const pointerToGame = (clientX: number, clientY: number) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = ((clientX - rect.left) / rect.width) * W;
-      const y = ((clientY - rect.top) / rect.height) * H;
-      return { x, y };
-    };
-
-    const onPointerDown = (e: PointerEvent) => {
-      sfx.unlock();
-      const { x, y } = pointerToGame(e.clientX, e.clientY);
-
-      // submit 모달이면 무시
-      if (statusRef.current === 'submit') return;
-
-      // ready/over면 탭으로 시작도 가능
-      if (statusRef.current === 'ready' || statusRef.current === 'over') {
-        start();
-        return;
-      }
-
-      if (y > H * 0.65) {
-        keys.fire = true;
-      } else {
-        keys.left = x < W / 2;
-        keys.right = x >= W / 2;
-      }
-    };
-
-    const onPointerUp = () => {
-      keys.left = false;
-      keys.right = false;
-      keys.fire = false;
-    };
-
-    // 키보드 입력
+    // 키보드
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft') keys.left = true;
       if (e.key === 'ArrowRight') keys.right = true;
@@ -445,12 +409,23 @@ export default function GalagaPage() {
 
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
-    canvas.addEventListener('pointerdown', onPointerDown);
-    window.addEventListener('pointerup', onPointerUp);
-    window.addEventListener('pointercancel', onPointerUp);
 
     const loop = () => {
       rafRef.current = requestAnimationFrame(loop);
+
+      // ✅ 모바일 버튼 상태를 매 프레임 합산
+      const mk = mobileKeysRef.current;
+      const st = statusRef.current;
+      if (st !== 'playing') {
+        // 게임 중이 아니면 이동/발사 입력은 무시
+        keys.fire = keys.fire && false;
+        keys.left = keys.left && false;
+        keys.right = keys.right && false;
+      } else {
+        keys.left = keys.left || mk.left;
+        keys.right = keys.right || mk.right;
+        keys.fire = keys.fire || mk.fire;
+      }
 
       if (doubleShot && Date.now() > doubleShotUntil) {
         doubleShot = false;
@@ -480,11 +455,11 @@ export default function GalagaPage() {
         ctx.fillText(`DOUBLE x2 (${remain}s)`, 14, 44);
       }
 
-      const st = statusRef.current;
+      // ready/over 안내
       if (!running && (st === 'ready' || st === 'over')) {
         ctx.fillStyle = '#ffffff';
         ctx.font = '16px ui-monospace, SFMono-Regular, Menlo, monospace';
-        const msg = st === 'over' ? 'GAME OVER - TAP/ENTER' : 'TAP/ENTER TO START';
+        const msg = st === 'over' ? 'GAME OVER - PRESS START' : 'PRESS START';
         const mw = ctx.measureText(msg).width;
         const bx = (W - mw) / 2 - 16;
         const by = H / 2 - 22;
@@ -523,7 +498,7 @@ export default function GalagaPage() {
           startDives(count);
         }
 
-        // 적 업데이트
+        // 적
         enemies.forEach((e, idx) => {
           if (!e.alive) return;
 
@@ -545,7 +520,7 @@ export default function GalagaPage() {
           }
         });
 
-        // 파워업 업데이트
+        // 파워업
         powerUps.forEach((p) => {
           if (!p.alive) return;
           p.y += p.vy;
@@ -655,6 +630,10 @@ export default function GalagaPage() {
       // 프레임
       ctx.strokeStyle = 'rgba(255,255,255,0.15)';
       ctx.strokeRect(10, 40, W - 20, H - 60);
+
+      // ✅ 다음 프레임을 위해 키보드키는 유지되지만, 모바일키는 버튼up에서 끄는 방식이라 그대로 둠
+      // keys는 키보드 상태가 남아있을 수 있어, 모바일키와 OR 처리한 뒤 다음 프레임에서도 키보드는 유지됨(의도)
+      // (모바일키는 ref에서 관리)
     };
 
     loop();
@@ -663,9 +642,6 @@ export default function GalagaPage() {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
-      canvas.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('pointerup', onPointerUp);
-      window.removeEventListener('pointercancel', onPointerUp);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -688,9 +664,26 @@ export default function GalagaPage() {
     saveLeaderboard(next);
     setNameInput('');
     setStatusSafe('over');
+
+    // 모달 닫힐 때 혹시 눌린 키 남아있으면 초기화
+    clearMobileKeys();
   };
 
   const resetRanking = () => saveLeaderboard([]);
+
+  const startByButton = async () => {
+    await sfx.unlock();
+    // 게임은 엔진 내부 start가 처리하지만, UI상에서 ready/over일 때만 의미
+    // ENTER 대신 안내: 캔버스는 텍스트만 표시되고, 실제 시작은 키보드 Enter 또는 버튼으로 트리거가 필요
+    // 그래서 간단히 상태를 건드리지 않고, "키보드 없는 환경"을 위해: 가짜 Enter 이벤트 대신,
+    // submit 모달 아닐 때 ready/over면 페이지 리로드 없이 시작하도록 'keydown Enter'를 디스패치.
+    // (가장 간단하게 기존 start 로직을 타게 함)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+  };
+
+  // 공통 버튼 스타일
+  const padBtn =
+    'select-none touch-none rounded-2xl px-4 py-4 font-mono text-base shadow-[0_0_0_1px_rgba(255,255,255,0.10)] active:scale-[0.98] transition';
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-start gap-3 p-3 sm:p-6">
@@ -698,25 +691,61 @@ export default function GalagaPage() {
         <Link href="/" className="text-sm font-mono opacity-80 hover:opacity-100">
           ← HOME
         </Link>
-        <div className="text-[12px] sm:text-sm font-mono opacity-80">← → 이동 / SPACE 발사 / TAP/ENTER 시작</div>
+        <div className="text-[12px] sm:text-sm font-mono opacity-80">PC: ← → / SPACE / ENTER</div>
       </div>
 
-      {/* ✅ 모바일: 세로, 데스크탑: 가로 */}
       <div className="w-full max-w-[520px] grid grid-cols-1 sm:grid-cols-[1fr_240px] gap-3 sm:gap-4 items-start">
         {/* GAME */}
         <div className="rounded-2xl p-3 bg-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.08)]">
-          <canvas
-            ref={canvasRef}
-            className="rounded-xl block"
-            style={{ width: `${viewSize.w}px`, height: `${viewSize.h}px` }}
-          />
+          <canvas ref={canvasRef} className="rounded-xl block" style={{ width: `${viewSize.w}px`, height: `${viewSize.h}px` }} />
           <div className="mt-3 flex items-center justify-between text-xs font-mono opacity-80">
             <div>SCORE: {score}</div>
             <div>STAGE: {stage}</div>
             <div>LIVES: {lives}</div>
           </div>
+
+          {/* ✅ 모바일 조작 패드 */}
+          <div className="mt-3 grid grid-cols-4 gap-2">
+            <button
+              onClick={startByButton}
+              className={`${padBtn} col-span-1 bg-emerald-600/80 hover:bg-emerald-600`}
+            >
+              START
+            </button>
+
+            <button
+              className={`${padBtn} bg-white/10`}
+              onPointerDown={() => setMobileKey('left', true)}
+              onPointerUp={() => setMobileKey('left', false)}
+              onPointerCancel={() => setMobileKey('left', false)}
+              onPointerLeave={() => setMobileKey('left', false)}
+            >
+              ←
+            </button>
+
+            <button
+              className={`${padBtn} bg-amber-500/80 hover:bg-amber-500 text-black`}
+              onPointerDown={() => setMobileKey('fire', true)}
+              onPointerUp={() => setMobileKey('fire', false)}
+              onPointerCancel={() => setMobileKey('fire', false)}
+              onPointerLeave={() => setMobileKey('fire', false)}
+            >
+              FIRE
+            </button>
+
+            <button
+              className={`${padBtn} bg-white/10`}
+              onPointerDown={() => setMobileKey('right', true)}
+              onPointerUp={() => setMobileKey('right', false)}
+              onPointerCancel={() => setMobileKey('right', false)}
+              onPointerLeave={() => setMobileKey('right', false)}
+            >
+              →
+            </button>
+          </div>
+
           <div className="mt-2 text-[11px] font-mono opacity-60 leading-relaxed">
-            * 모바일: 화면 상단 좌/우 터치로 이동, 하단 터치로 발사(누르면 연사)<br />
+            * 모바일: 아래 버튼을 누르고 있으면 계속 이동/연사합니다.<br />
             * 보너스: 적 처치 시 가끔 x2 드롭 → 먹으면 20초간 2발 발사
           </div>
         </div>
@@ -803,6 +832,7 @@ export default function GalagaPage() {
                 onClick={() => {
                   setNameInput('');
                   setStatusSafe('over');
+                  clearMobileKeys();
                 }}
                 className="rounded-lg bg-zinc-700 px-3 py-3 text-sm font-mono hover:bg-zinc-600 active:bg-zinc-500"
               >
@@ -811,8 +841,7 @@ export default function GalagaPage() {
             </div>
 
             <div className="mt-3 text-[11px] font-mono opacity-60 leading-relaxed">
-              모바일에서도 한글 입력 가능합니다.<br />
-              (키보드가 안 뜨면 입력창을 한 번 더 탭하세요)
+              모바일에서도 한글 입력 가능합니다.
             </div>
           </div>
         </div>
