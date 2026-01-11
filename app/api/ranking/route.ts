@@ -3,9 +3,22 @@ import { NextResponse } from "next/server";
 const MAX_RANK = 20;
 const MAX_NAME_LEN = 10;
 
+/**
+ * ✅ 이름 규칙 (서버 최종 기준)
+ * - 공백 제거
+ * - 항상 대문자로 저장
+ * - 허용: A-Z, 0-9, 한글(가-힣), 그리고 아래 특수문자
+ *   _ - . ! @ # $ % ^ & * ( ) + = { } [ ] ? / : ; , ~
+ *
+ * ※ 필요하면 허용 문자 더 늘릴 수 있음.
+ */
 function sanitizeName(input: string) {
   const noSpace = String(input ?? "").replace(/\s+/g, "");
-  const only = noSpace.replace(/[^0-9A-Za-z가-힣_-]/g, "");
+  const upper = noSpace.toUpperCase();
+
+  // 허용: 0-9, A-Z, 가-힣 + 특수문자 세트
+  const only = upper.replace(/[^0-9A-Z가-힣_\-\.!@#$%^&*()+={}\[\]?/:;,~]/g, "");
+
   return only.slice(0, MAX_NAME_LEN);
 }
 
