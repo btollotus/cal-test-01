@@ -42,7 +42,7 @@ type RankRow = {
 // ✅ 공유 랭킹: 갈라가 전용 game id
 const GAME_ID = 'galaga';
 
-// ✅ 이름 10자까지 (한글 포함)
+// ✅ 이름 10자까지 (영문/숫자만)
 const MAX_NAME_LEN = 10;
 
 // 랭킹 표시 개수
@@ -66,9 +66,10 @@ function formatKST(iso: string) {
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
 }
 
+// ✅ 영문/숫자만 허용 (특수문자/한글 전부 제거)
 function sanitizeName(input: string) {
   const noSpace = input.replace(/\s+/g, '');
-  const only = noSpace.replace(/[^0-9A-Za-z_-]/g, ''); // ✅ 영문/숫자/_- 만
+  const only = noSpace.replace(/[^0-9A-Za-z]/g, '');
   return only.slice(0, MAX_NAME_LEN);
 }
 
@@ -209,30 +210,21 @@ export default function GalagaPage() {
       const vw = window.innerWidth;
       const vh = window.innerHeight;
 
-      // Tailwind sm(640) 기준과 유사하게 분기
       const isWide = vw >= 640;
 
-      // 바깥 여백
-      const outerPadding = 16; // p-3~p-6 정도의 평균
+      const outerPadding = 16;
       const safeW = Math.max(0, vw - outerPadding * 2);
 
-      // 넓은 화면에서는 우측에 랭킹이 붙어서 게임영역 가로가 줄어듦
-      // (sm:grid-cols-[1fr_320px] 기준)
       const sideRankW = isWide ? 340 : 0;
       const gap = isWide ? 16 : 0;
 
-      // 게임 영역에서 실제로 쓸 수 있는 최대 폭
       const maxGameW = Math.max(320, safeW - sideRankW - gap);
 
-      // 너무 넓은 기기(태블릿/노트)에서 과하게 커지지 않도록 상한
       const wCandidate = Math.min(720, maxGameW);
 
-      // 세로는 화면 높이에서(상단바/점수줄/패드/설명 등) 빼고 남은 높이로 제한
-      // 넓은 화면은 랭킹이 옆으로 가서 reserved가 더 작음
       const reserved = isWide ? 220 : 320;
       const maxGameH = Math.max(520, vh - reserved);
 
-      // 비율 유지해서 w->h 계산 후, h가 넘치면 h로 다시 w를 계산
       let h = Math.round((wCandidate / BASE_W) * BASE_H);
       let w = wCandidate;
 
@@ -241,7 +233,6 @@ export default function GalagaPage() {
         w = Math.floor((h / BASE_H) * BASE_W);
       }
 
-      // 최소값 보정
       w = clamp(w, 320, 720);
       h = Math.floor((w / BASE_W) * BASE_H);
 
@@ -460,7 +451,6 @@ export default function GalagaPage() {
     const loop = () => {
       rafRef.current = requestAnimationFrame(loop);
 
-      // ✅ 매 프레임 “새로 계산”(누적 OR 금지)
       const st = statusRef.current;
       const mk = inputRef.current.mobile;
       const kb = inputRef.current.kb;
@@ -740,7 +730,6 @@ export default function GalagaPage() {
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-start gap-3 p-3 sm:p-6">
-      {/* ✅ max width를 늘려서 노트/큰 화면에서 옆으로 랭킹 배치가 자연스럽게 */}
       <div className="w-full max-w-[980px] flex items-center justify-between pt-2">
         <Link href="/" className="text-sm font-mono opacity-80 hover:opacity-100">
           ← HOME
@@ -798,20 +787,16 @@ export default function GalagaPage() {
           </div>
 
           <div className="mt-2 text-[11px] font-mono opacity-60">
-          {rankLoading ? (
-    '불러오는 중…'
-  ) : rankError ? (
-    <>
-      <span className="inline-block rounded-md bg-white/10 px-2 py-1">
-        랭킹 준비중
-      </span>
-      <span className="ml-2 opacity-70">
-        (관리자: Supabase 환경변수 설정 필요)
-      </span>
-    </>
-  ) : (
-    '공유 랭킹(오락실 1대 느낌)'
-  )}
+            {rankLoading ? (
+              '불러오는 중…'
+            ) : rankError ? (
+              <>
+                <span className="inline-block rounded-md bg-white/10 px-2 py-1">랭킹 준비중</span>
+                <span className="ml-2 opacity-70">(관리자: Supabase 환경변수 설정 필요)</span>
+              </>
+            ) : (
+              '공유 랭킹(오락실 1대 느낌)'
+            )}
           </div>
 
           <div className="mt-3 grid grid-cols-[40px_1fr_70px] gap-2 text-[11px] font-mono opacity-70">
@@ -827,18 +812,12 @@ export default function GalagaPage() {
               sortedBoard.map((r, i) => (
                 <div key={`${r.name}-${r.date}-${i}`} className="grid grid-cols-[40px_1fr_70px] gap-2 text-xs font-mono">
                   <div
-  className={`font-bold ${
-    i === 0
-      ? 'text-yellow-400'   // 1위 🥇
-      : i === 1
-      ? 'text-gray-300'     // 2위 🥈
-      : i === 2
-      ? 'text-amber-600'    // 3위 🥉
-      : 'text-white/80'    // 4위~
-  }`}
->
-  {i + 1}
-</div>
+                    className={`font-bold ${
+                      i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-amber-600' : 'text-white/80'
+                    }`}
+                  >
+                    {i + 1}
+                  </div>
 
                   <div className="leading-tight">
                     <div className="opacity-95 break-all">{r.name}</div>
@@ -850,8 +829,9 @@ export default function GalagaPage() {
             )}
           </div>
 
+          {/* ✅ 안내 문구도 영문/숫자만으로 변경 */}
           <div className="mt-4 text-[11px] font-mono opacity-60">
-            이름: 한글/영문/숫자 가능, {MAX_NAME_LEN}자 이내
+            이름: 영문/숫자만 가능, {MAX_NAME_LEN}자 이내
           </div>
         </div>
       </div>
@@ -866,7 +846,11 @@ export default function GalagaPage() {
             </div>
 
             <div className="mt-4">
-              <label className="block text-xs font-mono opacity-70 mb-2">이름 입력 (한글 {MAX_NAME_LEN}자까지)</label>
+              {/* ✅ 한글 안내 삭제 + 영문/숫자 안내 */}
+              <label className="block text-xs font-mono opacity-70 mb-2">
+                이름 입력 (영문/숫자만, 최대 {MAX_NAME_LEN}자)
+              </label>
+
               <input
                 autoFocus
                 value={nameInput}
@@ -880,35 +864,26 @@ export default function GalagaPage() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === 'NumpadEnter') submitScore();
                 }}
-                placeholder="예) 홍길동"
+                // ✅ 한글 예시 제거
+                placeholder="ex) PLAYER1"
                 className="w-full rounded-lg bg-black/40 px-3 py-3 text-base font-mono outline-none ring-1 ring-white/10 focus:ring-white/20"
               />
+
               <div className="mt-1 text-[11px] font-mono opacity-60">
                 현재: {sanitizeName(nameInput).length}/{MAX_NAME_LEN}
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-2">
+            {/* ✅ 건너뛰기 버튼 삭제: 저장 버튼만 남김 */}
+            <div className="mt-4">
               <button
                 onClick={submitScore}
                 disabled={sanitizeName(nameInput).length < 1}
-                className="rounded-lg bg-emerald-600 px-3 py-3 text-sm font-mono disabled:opacity-40 hover:bg-emerald-700 active:bg-emerald-800"
+                className="w-full rounded-lg bg-emerald-600 px-3 py-3 text-sm font-mono disabled:opacity-40 hover:bg-emerald-700 active:bg-emerald-800"
               >
                 저장
               </button>
-              <button
-                onClick={() => {
-                  setNameInput('');
-                  setStatusSafe('over');
-                  clearMobileKeys();
-                }}
-                className="rounded-lg bg-zinc-700 px-3 py-3 text-sm font-mono hover:bg-zinc-600 active:bg-zinc-500"
-              >
-                건너뛰기
-              </button>
             </div>
-
-            <div className="mt-3 text-[11px] font-mono opacity-60 leading-relaxed">모바일에서도 한글 입력 가능합니다.</div>
           </div>
         </div>
       )}
