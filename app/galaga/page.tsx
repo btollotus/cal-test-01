@@ -39,10 +39,16 @@ type RankRow = {
   date: string; // ISO string
 };
 
-const STORAGE_KEY = 'jdg_galaga_leaderboard_v1';
-const MAX_NAME_LEN = 5;
+// ✅ 공유 랭킹: 갈라가 전용 game id
+const GAME_ID = 'galaga';
+
+// ✅ 이름 10자까지 (한글 포함)
+const MAX_NAME_LEN = 10;
+
+// 랭킹 표시 개수
 const MAX_RANK = 20;
 
+// 게임 내부 기준 해상도(물리 캔버스는 이 값으로 고정, 화면에는 viewSize로 스케일)
 const BASE_W = 420;
 const BASE_H = 700;
 
@@ -61,6 +67,7 @@ function formatKST(iso: string) {
 }
 
 function sanitizeName(input: string) {
+  // ✅ 공백 제거 + 허용 문자만 + 10자 제한
   const noSpace = input.replace(/\s+/g, '');
   const only = noSpace.replace(/[^0-9A-Za-z가-힣_-]/g, '');
   return only.slice(0, MAX_NAME_LEN);
@@ -137,6 +144,7 @@ export default function GalagaPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
 
+  // ✅ 화면(기종 무관) 자동 스케일: vw/vh 기반
   const [viewSize, setViewSize] = useState({ w: BASE_W, h: BASE_H });
 
   const sfx = useSfx();
@@ -154,12 +162,13 @@ export default function GalagaPage() {
 
   const [nameInput, setNameInput] = useState('');
   const [leaderboard, setLeaderboard] = useState<RankRow[]>([]);
+  const [rankLoading, setRankLoading] = useState(false);
+  const [rankError, setRankError] = useState<string | null>(null);
 
   // ✅ 입력 상태는 ref로(멀티터치/키보드 모두)
   const inputRef = useRef({
     mobile: { left: false, right: false, fire: false },
     kb: { left: false, right: false, fire: false },
-    // 각 버튼이 잡고 있는 pointerId (캡처용)
     pid: { left: -1, right: -1, fire: -1 },
   });
 
@@ -168,21 +177,26 @@ export default function GalagaPage() {
     inputRef.current.pid = { left: -1, right: -1, fire: -1 };
   };
 
-  useEffect(() => {
+  // ✅ 공유 랭킹 불러오기
+  const loadRanking = async () => {
+    setRankLoading(true);
+    setRankError(null);
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setLeaderboard(JSON.parse(raw));
-    } catch {
-      setLeaderboard([]);
+      const res = await fetch(`/api/ranking?game=${GAME_ID}`, { cache: 'no-store' });
+      const json = await res.json();
+      if (json?.ok) setLeaderboard(json.rows ?? []);
+      else setRankError(json?.error ?? 'ranking load failed');
+    } catch (e: any) {
+      setRankError(e?.message ?? 'ranking load failed');
+    } finally {
+      setRankLoading(false);
     }
-  }, []);
-
-  const saveLeaderboard = (rows: RankRow[]) => {
-    setLeaderboard(rows);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
-    } catch {}
   };
+
+  // ✅ 최초 1회 로드
+  useEffect(() => {
+    loadRanking();
+  }, []);
 
   const sortedBoard = useMemo(() => {
     const copy = [...leaderboard];
@@ -190,17 +204,58 @@ export default function GalagaPage() {
     return copy.slice(0, MAX_RANK);
   }, [leaderboard]);
 
+  // ✅ 기종별(=화면별) 자동 크기
   useEffect(() => {
     const calc = () => {
       const vw = window.innerWidth;
-      const maxW = Math.min(520, vw - 24);
-      const w = Math.max(320, Math.min(BASE_W, maxW));
-      const h = Math.round((w / BASE_W) * BASE_H);
+      const vh = window.innerHeight;
+
+      // Tailwind sm(640) 기준과 유사하게 분기
+      const isWide = vw >= 640;
+
+      // 바깥 여백
+      const outerPadding = 16; // p-3~p-6 정도의 평균
+      const safeW = Math.max(0, vw - outerPadding * 2);
+
+      // 넓은 화면에서는 우측에 랭킹이 붙어서 게임영역 가로가 줄어듦
+      // (sm:grid-cols-[1fr_320px] 기준)
+      const sideRankW = isWide ? 340 : 0;
+      const gap = isWide ? 16 : 0;
+
+      // 게임 영역에서 실제로 쓸 수 있는 최대 폭
+      const maxGameW = Math.max(320, safeW - sideRankW - gap);
+
+      // 너무 넓은 기기(태블릿/노트)에서 과하게 커지지 않도록 상한
+      const wCandidate = Math.min(720, maxGameW);
+
+      // 세로는 화면 높이에서(상단바/점수줄/패드/설명 등) 빼고 남은 높이로 제한
+      // 넓은 화면은 랭킹이 옆으로 가서 reserved가 더 작음
+      const reserved = isWide ? 220 : 320;
+      const maxGameH = Math.max(520, vh - reserved);
+
+      // 비율 유지해서 w->h 계산 후, h가 넘치면 h로 다시 w를 계산
+      let h = Math.round((wCandidate / BASE_W) * BASE_H);
+      let w = wCandidate;
+
+      if (h > maxGameH) {
+        h = Math.floor(maxGameH);
+        w = Math.floor((h / BASE_H) * BASE_W);
+      }
+
+      // 최소값 보정
+      w = clamp(w, 320, 720);
+      h = Math.floor((w / BASE_W) * BASE_H);
+
       setViewSize({ w, h });
     };
+
     calc();
     window.addEventListener('resize', calc);
-    return () => window.removeEventListener('resize', calc);
+    window.addEventListener('orientationchange', calc);
+    return () => {
+      window.removeEventListener('resize', calc);
+      window.removeEventListener('orientationchange', calc);
+    };
   }, []);
 
   // -------------------- GAME LOOP --------------------
@@ -411,13 +466,14 @@ export default function GalagaPage() {
       const mk = inputRef.current.mobile;
       const kb = inputRef.current.kb;
 
-      const keys = st === 'playing'
-        ? {
-            left: kb.left || mk.left,
-            right: kb.right || mk.right,
-            fire: kb.fire || mk.fire,
-          }
-        : { left: false, right: false, fire: false };
+      const keys =
+        st === 'playing'
+          ? {
+              left: kb.left || mk.left,
+              right: kb.right || mk.right,
+              fire: kb.fire || mk.fire,
+            }
+          : { left: false, right: false, fire: false };
 
       if (doubleShot && Date.now() > doubleShotUntil) {
         doubleShot = false;
@@ -481,7 +537,9 @@ export default function GalagaPage() {
 
         if (t % diveEvery === 0) {
           const isRush = Math.random() < rushChance;
-          const count = isRush ? clamp(Math.floor(maxDivers * 1.6), 2, 8) : clamp(1 + Math.floor(Math.random() * maxDivers), 1, maxDivers);
+          const count = isRush
+            ? clamp(Math.floor(maxDivers * 1.6), 2, 8)
+            : clamp(1 + Math.floor(Math.random() * maxDivers), 1, maxDivers);
           startDives(count);
         }
 
@@ -616,27 +674,28 @@ export default function GalagaPage() {
     };
   }, [sfx]);
 
-  // -------------------- SCORE SUBMIT --------------------
-  const submitScore = () => {
+  // -------------------- SCORE SUBMIT (공유 랭킹 저장) --------------------
+  const submitScore = async () => {
     const safe = sanitizeName(nameInput);
     if (!safe) return;
 
-    const row: RankRow = { name: safe, score, date: new Date().toISOString() };
+    try {
+      await fetch('/api/ranking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ game: GAME_ID, name: safe, score }),
+      });
+    } catch {
+      // 저장 실패해도 일단 모달 닫아주고, 랭킹 로드는 실패 표시로 남김
+    }
 
-    const next = [...leaderboard, row]
-      .sort((a, b) => (b.score - a.score) || (new Date(b.date).getTime() - new Date(a.date).getTime()))
-      .slice(0, MAX_RANK);
-
-    saveLeaderboard(next);
     setNameInput('');
     setStatusSafe('over');
     clearMobileKeys();
+    loadRanking(); // ✅ 저장 후 새로고침
   };
 
-  const resetRanking = () => saveLeaderboard([]);
-
-  // ✅ START 버튼은 키 이벤트 디스패치 대신 “상태 기반”으로 처리하기 위해 Enter를 보내는 대신
-  // ready/over 상태에서만 Enter를 보내면 됨(간단/안정)
+  // ✅ START 버튼
   const startByButton = async () => {
     await sfx.unlock();
     const st = statusRef.current;
@@ -651,13 +710,10 @@ export default function GalagaPage() {
       onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
         e.preventDefault();
         sfx.unlock();
-        // 이미 이 버튼이 다른 포인터에 의해 눌렸다면 무시(중복 방지)
         if (inputRef.current.pid[key] !== -1) return;
 
         inputRef.current.pid[key] = e.pointerId;
         inputRef.current.mobile[key] = true;
-
-        // ✅ 캡처: 손가락이 살짝 움직여도 업 이벤트를 이 버튼이 받음
         e.currentTarget.setPointerCapture(e.pointerId);
       },
       onPointerUp: (e: React.PointerEvent<HTMLButtonElement>) => {
@@ -685,19 +741,20 @@ export default function GalagaPage() {
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-start gap-3 p-3 sm:p-6">
-      <div className="w-full max-w-[520px] flex items-center justify-between pt-2">
+      {/* ✅ max width를 늘려서 노트/큰 화면에서 옆으로 랭킹 배치가 자연스럽게 */}
+      <div className="w-full max-w-[980px] flex items-center justify-between pt-2">
         <Link href="/" className="text-sm font-mono opacity-80 hover:opacity-100">
           ← HOME
         </Link>
         <div className="text-[12px] sm:text-sm font-mono opacity-80">PC: ← → / SPACE / ENTER</div>
       </div>
 
-      <div className="w-full max-w-[520px] grid grid-cols-1 sm:grid-cols-[1fr_240px] gap-3 sm:gap-4 items-start">
+      <div className="w-full max-w-[980px] grid grid-cols-1 sm:grid-cols-[1fr_340px] gap-3 sm:gap-4 items-start">
         {/* GAME */}
         <div className="rounded-2xl p-3 bg-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.08)]">
           <canvas
             ref={canvasRef}
-            className="rounded-xl block"
+            className="rounded-xl block mx-auto"
             style={{ width: `${viewSize.w}px`, height: `${viewSize.h}px` }}
           />
 
@@ -736,9 +793,13 @@ export default function GalagaPage() {
         <div className="rounded-2xl p-4 bg-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.08)]">
           <div className="flex items-center justify-between">
             <div className="font-mono text-sm">🏆 RANKING</div>
-            <button onClick={resetRanking} className="text-xs font-mono opacity-70 hover:opacity-100">
-              reset
+            <button onClick={loadRanking} className="text-xs font-mono opacity-70 hover:opacity-100">
+              refresh
             </button>
+          </div>
+
+          <div className="mt-2 text-[11px] font-mono opacity-60">
+            {rankLoading ? '불러오는 중…' : rankError ? `불러오기 실패: ${rankError}` : '공유 랭킹(오락실 1대 느낌)'}
           </div>
 
           <div className="mt-3 grid grid-cols-[40px_1fr_70px] gap-2 text-[11px] font-mono opacity-70">
@@ -755,7 +816,7 @@ export default function GalagaPage() {
                 <div key={`${r.name}-${r.date}-${i}`} className="grid grid-cols-[40px_1fr_70px] gap-2 text-xs font-mono">
                   <div className="opacity-80">#{i + 1}</div>
                   <div className="leading-tight">
-                    <div className="opacity-95">{r.name}</div>
+                    <div className="opacity-95 break-all">{r.name}</div>
                     <div className="opacity-50">{formatKST(r.date)}</div>
                   </div>
                   <div className="text-right opacity-90">{r.score.toLocaleString('en-US')}</div>
@@ -765,7 +826,7 @@ export default function GalagaPage() {
           </div>
 
           <div className="mt-4 text-[11px] font-mono opacity-60">
-            이름: 한글/영문/숫자 가능, 5글자 이내
+            이름: 한글/영문/숫자 가능, {MAX_NAME_LEN}자 이내
           </div>
         </div>
       </div>
@@ -780,7 +841,7 @@ export default function GalagaPage() {
             </div>
 
             <div className="mt-4">
-              <label className="block text-xs font-mono opacity-70 mb-2">이름 입력 (한글 5자까지)</label>
+              <label className="block text-xs font-mono opacity-70 mb-2">이름 입력 (한글 {MAX_NAME_LEN}자까지)</label>
               <input
                 autoFocus
                 value={nameInput}
@@ -822,9 +883,7 @@ export default function GalagaPage() {
               </button>
             </div>
 
-            <div className="mt-3 text-[11px] font-mono opacity-60 leading-relaxed">
-              모바일에서도 한글 입력 가능합니다.
-            </div>
+            <div className="mt-3 text-[11px] font-mono opacity-60 leading-relaxed">모바일에서도 한글 입력 가능합니다.</div>
           </div>
         </div>
       )}
