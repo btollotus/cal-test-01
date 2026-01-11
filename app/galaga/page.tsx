@@ -32,7 +32,6 @@ function clamp(n: number, a: number, b: number) {
 }
 
 function formatKST(iso: string) {
-  // 브라우저 로컬 시간(한국이면 KST로 보임)
   const d = new Date(iso);
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -91,23 +90,28 @@ function useSfx() {
     } catch {}
   };
 
-  const shoot = () => beep(740, 0.04, 'square', 0.05);
-  const hit = () => {
-    beep(220, 0.05, 'sawtooth', 0.07);
-    setTimeout(() => beep(140, 0.06, 'sawtooth', 0.06), 40);
-  };
-  const dead = () => {
-    beep(180, 0.08, 'triangle', 0.08);
-    setTimeout(() => beep(120, 0.12, 'triangle', 0.07), 70);
-    setTimeout(() => beep(80, 0.14, 'triangle', 0.06), 150);
-  };
-  const clear = () => {
-    beep(523, 0.05, 'square', 0.06);
-    setTimeout(() => beep(659, 0.05, 'square', 0.06), 60);
-    setTimeout(() => beep(784, 0.06, 'square', 0.06), 120);
-  };
+  const api = useMemo(() => {
+    const shoot = () => beep(740, 0.04, 'square', 0.05);
+    const hit = () => {
+      beep(220, 0.05, 'sawtooth', 0.07);
+      setTimeout(() => beep(140, 0.06, 'sawtooth', 0.06), 40);
+    };
+    const dead = () => {
+      beep(180, 0.08, 'triangle', 0.08);
+      setTimeout(() => beep(120, 0.12, 'triangle', 0.07), 70);
+      setTimeout(() => beep(80, 0.14, 'triangle', 0.06), 150);
+    };
+    const clear = () => {
+      beep(523, 0.05, 'square', 0.06);
+      setTimeout(() => beep(659, 0.05, 'square', 0.06), 60);
+      setTimeout(() => beep(784, 0.06, 'square', 0.06), 120);
+    };
 
-  return { unlock, shoot, hit, dead, clear };
+    return { unlock, shoot, hit, dead, clear };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return api;
 }
 
 export default function GalagaPage() {
@@ -190,8 +194,8 @@ export default function GalagaPage() {
     let localLives = 3;
 
     const difficulty = () => {
-      const diveEvery = Math.max(90, 360 - (localStage - 1) * 30); // 자주 다이브
-      const diveSpeed = 2.6 + (localStage - 1) * 0.25;           // 더 빠르게
+      const diveEvery = Math.max(90, 360 - (localStage - 1) * 30);
+      const diveSpeed = 2.6 + (localStage - 1) * 0.25;
       const fireCd = Math.max(7, 10 - Math.floor((localStage - 1) / 2));
       return { diveEvery, diveSpeed, fireCd };
     };
@@ -256,13 +260,10 @@ export default function GalagaPage() {
     const start = async () => {
       await sfx.unlock();
 
-      // submit 상태에서는 모달 때문에 시작 막기
       const st = statusRef.current;
       if (st === 'submit') return;
 
-      // over/ready에서 시작
       if (st === 'over' || st === 'ready') {
-        // over면 완전 초기화 후 시작
         if (st === 'over') {
           localStage = 1;
           localScore = 0;
@@ -296,7 +297,7 @@ export default function GalagaPage() {
 
       if (localLives <= 0) {
         running = false;
-        setStatusSafe('submit'); // 게임오버 → 이름 입력
+        setStatusSafe('submit');
       }
     };
 
@@ -436,10 +437,6 @@ export default function GalagaPage() {
         if (enemies.length > 0 && enemies.every((e) => !e.alive)) {
           nextStage();
         }
-
-        // UI 하단 동기화(필요 최소만)
-        setLives(localLives);
-        setStage(localStage);
       }
 
       // 폭발
@@ -493,7 +490,9 @@ export default function GalagaPage() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [sfx]);
+    // ✅ 의존성 비움: 게임 루프는 1회만
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // -------------------- SUBMIT SCORE --------------------
   const submitScore = () => {
@@ -512,7 +511,7 @@ export default function GalagaPage() {
 
     saveLeaderboard(next);
     setNameInput('');
-    setStatusSafe('over'); // 제출 후 over 화면
+    setStatusSafe('over');
   };
 
   const resetRanking = () => {
@@ -535,8 +534,7 @@ export default function GalagaPage() {
             ref={canvasRef}
             className="rounded-xl"
             onPointerDown={() => {
-              // 클릭으로도 오디오 잠금 해제
-              sfx.unlock();
+              sfx.unlock(); // 클릭으로도 오디오 잠금 해제
             }}
           />
           <div className="mt-3 flex items-center justify-between text-xs font-mono opacity-80">
@@ -553,10 +551,7 @@ export default function GalagaPage() {
         <div className="rounded-2xl p-4 bg-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.08)]">
           <div className="flex items-center justify-between">
             <div className="font-mono text-sm">🏆 RANKING</div>
-            <button
-              onClick={resetRanking}
-              className="text-xs font-mono opacity-70 hover:opacity-100"
-            >
+            <button onClick={resetRanking} className="text-xs font-mono opacity-70 hover:opacity-100">
               reset
             </button>
           </div>
