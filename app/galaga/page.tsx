@@ -66,12 +66,21 @@ function formatKST(iso: string) {
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
 }
 
-// ✅ 영문/숫자만 허용 (특수문자/한글 전부 제거)
+// ✅ 영문/숫자/특수문자 허용 (/한글 안됨)
 function sanitizeName(input: string) {
+  // 공백 제거
   const noSpace = input.replace(/\s+/g, '');
-  const only = noSpace.replace(/[^0-9A-Za-z]/g, '');
+
+  // ✅ 결과는 항상 대문자
+  const upper = noSpace.toUpperCase();
+
+  // ✅ 허용 문자: A-Z, 0-9, 그리고 아래 특수문자들
+  // _ - . ! @ # $ % ^ & * ( ) + = ? : ; , /
+  const only = upper.replace(/[^0-9A-Z_\-\.!@#$%^&*()+={}\[\]?/:;,]/g, '');
+
   return only.slice(0, MAX_NAME_LEN);
 }
+
 
 /** 외부 파일 없이 효과음(오실레이터) */
 function useSfx() {
@@ -852,22 +861,24 @@ export default function GalagaPage() {
               </label>
 
               <input
-                autoFocus
-                value={nameInput}
-                maxLength={MAX_NAME_LEN}
-                inputMode="text"
-                enterKeyHint="done"
-                autoComplete="off"
-                autoCorrect="off"
-                spellCheck={false}
-                onChange={(e) => setNameInput(sanitizeName(e.target.value))}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === 'NumpadEnter') submitScore();
-                }}
-                // ✅ 한글 예시 제거
-                placeholder="ex) PLAYER1"
-                className="w-full rounded-lg bg-black/40 px-3 py-3 text-base font-mono outline-none ring-1 ring-white/10 focus:ring-white/20"
-              />
+  autoFocus
+  value={nameInput}
+  maxLength={MAX_NAME_LEN}
+  inputMode="text"
+  autoCapitalize="characters"
+  enterKeyHint="done"
+  autoComplete="off"
+  autoCorrect="off"
+  spellCheck={false}
+  onChange={(e) => setNameInput(sanitizeName(e.target.value))}
+  onKeyDown={(e) => {
+    if (e.key === 'Enter' || e.key === 'NumpadEnter') submitScore();
+  }}
+  placeholder="예) JDG-PLAYER_01!"
+  style={{ textTransform: 'uppercase' }}
+  className="w-full rounded-lg bg-black/40 px-3 py-3 text-base font-mono outline-none ring-1 ring-white/10 focus:ring-white/20"
+/>
+
 
               <div className="mt-1 text-[11px] font-mono opacity-60">
                 현재: {sanitizeName(nameInput).length}/{MAX_NAME_LEN}
