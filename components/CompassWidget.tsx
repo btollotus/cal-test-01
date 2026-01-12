@@ -15,12 +15,57 @@ function dirLabel(deg: number) {
   return dirs[idx];
 }
 
+/** 짧은 “딩!” 효과음 (외부 파일 없이) */
+function playDing() {
+  try {
+    const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
+    const ctx = new AudioCtx();
+
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+
+    o.type = 'sine';
+    o.frequency.setValueAtTime(880, ctx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.08);
+
+    g.gain.setValueAtTime(0.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.12);
+
+    o.connect(g);
+    g.connect(ctx.destination);
+
+    o.start();
+    o.stop(ctx.currentTime + 0.13);
+
+    o.onended = () => {
+      try {
+        ctx.close();
+      } catch {}
+    };
+  } catch {
+    // 무음 (브라우저/권한/정책에 따라 실패할 수 있음)
+  }
+}
+
 export default function CompassWidget() {
   const [supported, setSupported] = useState(true);
   const [needPermission, setNeedPermission] = useState(false);
   const [heading, setHeading] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  // 스무딩
   const smoothRef = useRef<number | null>(null);
+
+  // LOCK 상태
+  const [locked, setLocked] = useState(false);
+  const lockedRef = useRef(false);
+
+  // “딩” 중복 방지(LOCK 진입 시 1회)
+  const dingedRef = useRef(false);
+
+  // 설정값 (원하면 여기만 조절)
+  const LOCK_THRESH_DEG = 2; // 북쪽(0°) ±2°면 LOCK
 
   const pretty = useMemo(() => {
     if (heading === null) return { deg: '—', dir: '—' };
@@ -29,17 +74,14 @@ export default function CompassWidget() {
   }, [heading]);
 
   const handleOrientation = (e: DeviceOrientationEvent) => {
-    // iOS Safari: webkitCompassHeading 제공(0=북, 시계방향)
     const anyE = e as any;
     const iosHeading = typeof anyE.webkitCompassHeading === 'number' ? anyE.webkitCompassHeading : null;
-
-    // 표준: alpha(0~360) - 북쪽 기준일 수 있으나 기기/브라우저에 따라 달라질 수 있음
     const alpha = typeof e.alpha === 'number' ? e.alpha : null;
 
     const raw = iosHeading ?? alpha;
     if (raw === null) return;
 
-    // 간단한 스무딩(튀는 값 완화)
+    // 스무딩
     const prev = smoothRef.current;
     const next = raw;
 
@@ -49,7 +91,6 @@ export default function CompassWidget() {
       return;
     }
 
-    // 각도 래핑 고려한 보간
     let delta = next - prev;
     if (delta > 180) delta -= 360;
     if (delta < -180) delta += 360;
@@ -57,6 +98,29 @@ export default function CompassWidget() {
     const smoothed = prev + delta * 0.15;
     smoothRef.current = smoothed;
     setHeading(smoothed);
+
+    // LOCK 판정: 0° 근처면 잠금
+    const a = clampAngle(smoothed);
+    const distToNorth = Math.min(a, 360 - a); // 0까지의 최소거리
+
+    const nowLocked = distToNorth <= LOCK_THRESH_DEG;
+
+    // 상태 전이 시만 set
+    if (nowLocked !== lockedRef.current) {
+      lockedRef.current = nowLocked;
+      setLocked(nowLocked);
+
+      // LOCK 진입 시 "딩!" 1회
+      if (nowLocked) {
+        if (!dingedRef.current) {
+          dingedRef.current = true;
+          playDing();
+        }
+      } else {
+        // LOCK 해제되면 다시 딩 가능
+        dingedRef.current = false;
+      }
+    }
   };
 
   const start = async () => {
@@ -69,7 +133,6 @@ export default function CompassWidget() {
         return;
       }
 
-      // iOS 13+: 권한 요청 필요
       const anyDOE = DeviceOrientationEvent as any;
       if (typeof anyDOE?.requestPermission === 'function') {
         setNeedPermission(true);
@@ -82,31 +145,46 @@ export default function CompassWidget() {
 
       setNeedPermission(false);
       window.addEventListener('deviceorientation', handleOrientation, true);
+
+      // iOS에서 오디오가 막히는 경우가 있어,
+      // 권한 버튼 누르는 순간에 오디오 컨텍스트가 열리도록 “무음 딩” 한번 준비
+      // (실제 소리는 LOCK 때)
+      try {
+        playDing();
+      } catch {}
     } catch (e: any) {
       setErr(e?.message ?? '센서 시작 실패');
     }
   };
 
   useEffect(() => {
-    // 안드로이드/데스크톱 일부는 권한 없이도 바로 됨 → 자동 시작 시도
     start();
-
     return () => {
       window.removeEventListener('deviceorientation', handleOrientation, true);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 바늘 회전 각도
   const rot = heading === null ? 0 : clampAngle(heading);
+
+  // 많은 기기에서 “북쪽 바늘”은 -rot이 더 자연스러움
+  const needleRotate = -rot;
 
   return (
     <div className="rounded-2xl bg-zinc-900/90 p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.10)]">
       {/* HUD 헤더 */}
       <div className="flex items-center justify-between font-mono text-[12px] uppercase tracking-widest text-white/80">
         <div>COMPASS HUD</div>
+
         <div className="flex items-center gap-2">
-          <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_16px_rgba(52,211,153,0.8)]" />
-          <span className="text-white/70">{heading === null ? 'WAIT' : 'OK'}</span>
+          <span
+            className={[
+              'inline-block h-2.5 w-2.5 rounded-full shadow-[0_0_16px_rgba(52,211,153,0.8)]',
+              locked ? 'bg-emerald-300 shadow-[0_0_22px_rgba(52,211,153,1)]' : 'bg-emerald-400',
+            ].join(' ')}
+          />
+          <span className="text-white/70">{heading === null ? 'WAIT' : locked ? 'LOCK' : 'OK'}</span>
         </div>
       </div>
 
@@ -125,11 +203,12 @@ export default function CompassWidget() {
 
           {/* N/E/S/W */}
           <div
-            className="
-              absolute left-1/2 top-2 -translate-x-1/2
-              font-mono text-xs font-bold text-emerald-300
-              drop-shadow-[0_0_10px_rgba(52,211,153,0.95)]
-            "
+            className={[
+              'absolute left-1/2 top-2 -translate-x-1/2 font-mono text-xs font-bold',
+              locked
+                ? 'text-emerald-200 drop-shadow-[0_0_12px_rgba(52,211,153,1)]'
+                : 'text-emerald-300 drop-shadow-[0_0_10px_rgba(52,211,153,0.95)]',
+            ].join(' ')}
           >
             N
           </div>
@@ -137,37 +216,69 @@ export default function CompassWidget() {
           <div className="absolute left-1/2 bottom-2 -translate-x-1/2 font-mono text-xs text-white/70">S</div>
           <div className="absolute left-2 top-1/2 -translate-y-1/2 font-mono text-xs text-white/70">W</div>
 
-          {/* ✅ 바늘(삼각형 포인터 + 네온) : 중앙 기준 회전 */}
+          {/* ✅ 길쭉한 나침반 바늘(중앙 회전 고정) */}
           <div
             className="absolute left-1/2 top-1/2 transition-transform duration-100"
-            style={{ transform: `translate(-50%, -50%) rotate(${-rot}deg)` }}
+            style={{ transform: `translate(-50%, -50%) rotate(${needleRotate}deg)` }}
           >
-            {/* 몸통 */}
-            <div
-              className="
-                absolute left-1/2 -translate-x-1/2
-                -top-[40%]
-                h-[40%] w-[2px]
-                bg-rose-400
-                drop-shadow-[0_0_12px_rgba(251,113,133,0.85)]
-              "
-            />
-            {/* 삼각형 끝 */}
-            <div
-              className="
-                absolute left-1/2 -translate-x-1/2
-                -top-[46%]
-                w-0 h-0
-                border-l-[8px] border-l-transparent
-                border-r-[8px] border-r-transparent
-                border-b-[18px] border-b-rose-400
-                drop-shadow-[0_0_14px_rgba(251,113,133,0.95)]
-              "
-            />
+            {/* 바늘 전체(세로) */}
+            <div className="relative h-[70%] w-[10px]">
+              {/* 북쪽(빨강) */}
+              <div
+                className="
+                  absolute left-1/2 top-0
+                  -translate-x-1/2
+                  h-1/2 w-[6px]
+                  rounded-full
+                  bg-rose-400
+                  shadow-[0_0_14px_rgba(251,113,133,0.85)]
+                "
+              />
+              {/* 남쪽(회색) */}
+              <div
+                className="
+                  absolute left-1/2 bottom-0
+                  -translate-x-1/2
+                  h-1/2 w-[6px]
+                  rounded-full
+                  bg-white/30
+                  shadow-[0_0_10px_rgba(255,255,255,0.12)]
+                "
+              />
+              {/* 바늘 끝(삼각 캡) - 북쪽 */}
+              <div
+                className="
+                  absolute left-1/2 -translate-x-1/2
+                  -top-1
+                  w-0 h-0
+                  border-l-[7px] border-l-transparent
+                  border-r-[7px] border-r-transparent
+                  border-b-[14px] border-b-rose-300
+                  drop-shadow-[0_0_16px_rgba(251,113,133,0.9)]
+                "
+              />
+              {/* 바늘 끝(삼각 캡) - 남쪽 */}
+              <div
+                className="
+                  absolute left-1/2 -translate-x-1/2
+                  -bottom-1
+                  w-0 h-0
+                  border-l-[7px] border-l-transparent
+                  border-r-[7px] border-r-transparent
+                  border-t-[14px] border-t-white/25
+                  drop-shadow-[0_0_10px_rgba(255,255,255,0.10)]
+                "
+              />
+            </div>
           </div>
 
           {/* 중심 점 */}
           <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-300 shadow-[0_0_14px_rgba(52,211,153,0.8)]" />
+
+          {/* LOCK 링(LOCK 시 살짝 강조) */}
+          {locked && (
+            <div className="pointer-events-none absolute inset-6 rounded-full ring-2 ring-emerald-400/40 shadow-[0_0_22px_rgba(52,211,153,0.25)]" />
+          )}
         </div>
 
         {/* 숫자/상태 */}
@@ -186,6 +297,10 @@ export default function CompassWidget() {
 
           {!supported && <div className="mt-3 font-mono text-[11px] text-white/60">이 기기/브라우저는 지원 안됨</div>}
           {err && <div className="mt-3 font-mono text-[11px] text-rose-200">{err}</div>}
+
+          <div className="mt-3 font-mono text-[11px] text-white/55">
+            LOCK: ±{LOCK_THRESH_DEG}°
+          </div>
         </div>
       </div>
 
