@@ -221,19 +221,21 @@ export default function Home() {
 
           </div>
 
-          {/* Display */}
-          <div className="mb-6 rounded-lg bg-gray-900 p-6 text-right dark:bg-gray-950">
-            <div className="min-h-[60px] text-4xl font-mono font-semibold text-white">
-              {formatDisplay(display)}
-              {getEmoji(display)}
-            </div>
-          </div>
+
 
           <OnlineStats />
 
           {/* ✅ 수평계 */}
           <div className="mt-4">
             <LevelWidget />
+          </div>
+          
+          {/* Display */}
+          <div className="mb-6 rounded-lg bg-gray-900 p-6 text-right dark:bg-gray-950">
+            <div className="min-h-[60px] text-4xl font-mono font-semibold text-white">
+              {formatDisplay(display)}
+              {getEmoji(display)}
+            </div>
           </div>
 
           {/* Buttons */}
