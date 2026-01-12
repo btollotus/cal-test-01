@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import OnlineStats from '@/components/OnlineStats';
 import LevelWidget from '@/components/LevelWidget';
+import CompassWidget from '@/components/CompassWidget';
+
 
 export default function Home() {
   // ✅ Intro 상태
@@ -225,18 +227,23 @@ export default function Home() {
 
           <OnlineStats />
 
-          {/* ✅ 수평계 */}
-          <div className="mt-4 mb-6">
+{/* 수평계 */}
+<div className="mt-4 mb-6">
   <LevelWidget />
 </div>
 
-          {/* Display */}
-          <div className="mb-6 rounded-lg bg-gray-900 p-6 text-right dark:bg-gray-950">
-            <div className="min-h-[60px] text-4xl font-mono font-semibold text-white">
-              {formatDisplay(display)}
-              {getEmoji(display)}
-            </div>
-          </div>
+{/* 🧭 나침반 */}
+<div className="mb-6">
+  <CompassWidget />
+</div>
+
+{/* 계산 결과창 */}
+<div className="mt-2 mb-6 rounded-lg bg-gray-900 p-6 text-right dark:bg-gray-950">
+  <div className="min-h-[60px] text-4xl font-mono font-semibold text-white">
+    {formatDisplay(display)}
+    {getEmoji(display)}
+  </div>
+</div>
 
           {/* Buttons */}
           <div className="mt-4 grid grid-cols-4 gap-3">
