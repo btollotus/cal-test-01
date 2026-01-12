@@ -217,6 +217,14 @@ export default function Home() {
             >
               🧧 로또번호 생성기
             </Link>
+
+            {/* ✅ NEW: 줄자 버튼 */}
+            <Link
+              href="/ruler"
+              className="rounded-lg bg-zinc-800 px-3 py-3 text-center text-base font-bold text-white hover:bg-zinc-700 active:bg-zinc-900"
+            >
+              📏 줄자
+            </Link>
           </div>
 
           {/* Display */}
