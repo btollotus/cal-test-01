@@ -129,11 +129,14 @@ export default function CompassWidget() {
           <div className="absolute left-1/2 bottom-2 -translate-x-1/2 font-mono text-xs text-white/70">S</div>
           <div className="absolute left-2 top-1/2 -translate-y-1/2 font-mono text-xs text-white/70">W</div>
 
-          {/* 바늘(북쪽) */}
-          <div
-            className="absolute left-1/2 top-1/2 h-[42%] w-1 -translate-x-1/2 -translate-y-[85%] origin-bottom rounded-full bg-rose-400 shadow-[0_0_18px_rgba(251,113,133,0.7)] transition-transform duration-100"
-            style={{ transform: `translate(-50%, -85%) rotate(${rot}deg)` }}
-          />
+{/* 바늘(북쪽) - 중앙 회전 고정 */}
+<div
+  className="absolute left-1/2 top-1/2 transition-transform duration-100"
+  style={{ transform: `translate(-50%, -50%) rotate(${rot}deg)` }}
+>
+  <div className="h-[42%] w-1 origin-bottom -translate-y-[85%] rounded-full bg-rose-400 shadow-[0_0_18px_rgba(251,113,133,0.7)]" />
+</div>
+
           {/* 중심 점 */}
           <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-300 shadow-[0_0_14px_rgba(52,211,153,0.8)]" />
         </div>
