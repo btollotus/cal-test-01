@@ -81,7 +81,6 @@ function sanitizeName(input: string) {
   return only.slice(0, MAX_NAME_LEN);
 }
 
-
 /** 외부 파일 없이 효과음(오실레이터) */
 function useSfx() {
   const ctxRef = useRef<AudioContext | null>(null);
@@ -209,7 +208,7 @@ export default function GalagaPage() {
 
   const sortedBoard = useMemo(() => {
     const copy = [...leaderboard];
-    copy.sort((a, b) => (b.score - a.score) || (new Date(b.date).getTime() - new Date(a.date).getTime()));
+    copy.sort((a, b) => b.score - a.score || new Date(b.date).getTime() - new Date(a.date).getTime());
     return copy.slice(0, MAX_RANK);
   }, [leaderboard]);
 
@@ -297,7 +296,7 @@ export default function GalagaPage() {
       const maxDivers = clamp(1 + Math.floor((localStage - 1) / 2), 1, 6);
       const rushChance = clamp(0.06 + (localStage - 1) * 0.01, 0.06, 0.18);
       const fireCd = Math.max(6, 10 - Math.floor((localStage - 1) / 2));
-      const powerDrop = 0.10;
+      const powerDrop = 0.1;
       return { diveEvery, baseDiveSpeed, maxDivers, rushChance, fireCd, powerDrop };
     };
 
@@ -466,11 +465,7 @@ export default function GalagaPage() {
 
       const keys =
         st === 'playing'
-          ? {
-              left: kb.left || mk.left,
-              right: kb.right || mk.right,
-              fire: kb.fire || mk.fire,
-            }
+          ? { left: kb.left || mk.left, right: kb.right || mk.right, fire: kb.fire || mk.fire }
           : { left: false, right: false, fire: false };
 
       if (doubleShot && Date.now() > doubleShotUntil) {
@@ -535,9 +530,7 @@ export default function GalagaPage() {
 
         if (t % diveEvery === 0) {
           const isRush = Math.random() < rushChance;
-          const count = isRush
-            ? clamp(Math.floor(maxDivers * 1.6), 2, 8)
-            : clamp(1 + Math.floor(Math.random() * maxDivers), 1, maxDivers);
+          const count = isRush ? clamp(Math.floor(maxDivers * 1.6), 2, 8) : clamp(1 + Math.floor(Math.random() * maxDivers), 1, maxDivers);
           startDives(count);
         }
 
@@ -795,6 +788,7 @@ export default function GalagaPage() {
             </button>
           </div>
 
+          {/* ✅ 여기(에러났던 자리) 수정 완료: else를 null로 처리 */}
           <div className="mt-2 text-[11px] font-mono opacity-60">
             {rankLoading ? (
               '불러오는 중…'
@@ -803,8 +797,7 @@ export default function GalagaPage() {
                 <span className="inline-block rounded-md bg-white/10 px-2 py-1">랭킹 준비중</span>
                 <span className="ml-2 opacity-70">(관리자: Supabase 환경변수 설정 필요)</span>
               </>
-            ) : (
-            )}
+            ) : null}
           </div>
 
           <div className="mt-3 grid grid-cols-[40px_1fr_70px] gap-2 text-[11px] font-mono opacity-70">
@@ -854,37 +847,34 @@ export default function GalagaPage() {
             </div>
 
             <div className="mt-4">
-              {/* ✅ 한글 안내 삭제 + 영문/숫자 안내 */}
               <label className="block text-xs font-mono opacity-70 mb-2">
                 이름 입력 (영문/숫자만, 최대 {MAX_NAME_LEN}자)
               </label>
 
               <input
-  autoFocus
-  value={nameInput}
-  maxLength={MAX_NAME_LEN}
-  inputMode="text"
-  autoCapitalize="characters"
-  enterKeyHint="done"
-  autoComplete="off"
-  autoCorrect="off"
-  spellCheck={false}
-  onChange={(e) => setNameInput(sanitizeName(e.target.value))}
-  onKeyDown={(e) => {
-    if (e.key === 'Enter' || e.key === 'NumpadEnter') submitScore();
-  }}
-  placeholder="예) JDG-PLAYER_01!"
-  style={{ textTransform: 'uppercase' }}
-  className="w-full rounded-lg bg-black/40 px-3 py-3 text-base font-mono outline-none ring-1 ring-white/10 focus:ring-white/20"
-/>
-
+                autoFocus
+                value={nameInput}
+                maxLength={MAX_NAME_LEN}
+                inputMode="text"
+                autoCapitalize="characters"
+                enterKeyHint="done"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                onChange={(e) => setNameInput(sanitizeName(e.target.value))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === 'NumpadEnter') submitScore();
+                }}
+                placeholder="예) JDG-PLAYER_01!"
+                style={{ textTransform: 'uppercase' }}
+                className="w-full rounded-lg bg-black/40 px-3 py-3 text-base font-mono outline-none ring-1 ring-white/10 focus:ring-white/20"
+              />
 
               <div className="mt-1 text-[11px] font-mono opacity-60">
                 현재: {sanitizeName(nameInput).length}/{MAX_NAME_LEN}
               </div>
             </div>
 
-            {/* ✅ 건너뛰기 버튼 삭제: 저장 버튼만 남김 */}
             <div className="mt-4">
               <button
                 onClick={submitScore}

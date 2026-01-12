@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import OnlineStats from "@/components/OnlineStats";
+import OnlineStats from '@/components/OnlineStats';
 import LevelWidget from '@/components/LevelWidget';
-
 
 export default function Home() {
   // ✅ Intro 상태
@@ -167,15 +166,14 @@ export default function Home() {
         </div>
       )}
 
-      {/* ✅ Main UI (기존 그대로) */}
+      {/* ✅ Main UI */}
       <div
         className={[
-          "flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800",
-          showIntro ? "opacity-0" : "opacity-100 transition-opacity duration-500",
-        ].join(" ")}
+          'flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800',
+          showIntro ? 'opacity-0' : 'opacity-100 transition-opacity duration-500',
+        ].join(' ')}
       >
         <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-800">
-
           {/* ✅ 바로가기 버튼 영역 */}
           <div className="mb-4 grid grid-cols-2 gap-2">
             <Link
@@ -206,7 +204,6 @@ export default function Home() {
               ✊✋✌️ 가위바위보
             </Link>
 
-            {/* ✅ NEW: 겔러그(갈라가) 버튼 */}
             <Link
               href="/galaga"
               className="rounded-lg bg-sky-600 px-3 py-3 text-center text-base font-bold text-white hover:bg-sky-700 active:bg-sky-800"
@@ -214,18 +211,12 @@ export default function Home() {
               🛸 겔러그
             </Link>
 
-            {/* ✅ 로또 버튼 */}
             <Link
               href="/lotto"
               className="rounded-lg bg-amber-600 px-3 py-3 text-center text-base font-bold text-white hover:bg-amber-700 active:bg-amber-800"
             >
               🧧 로또번호 생성기
             </Link>
-
-            {/* 필요하면 2열 꽉 채우기: 로또를 col-span-2로 유지하고 싶으면 아래처럼 바꾸면 됨
-              - 겔러그 추가로 버튼 수가 늘어서 로또가 자동으로 다음 줄로 내려가요.
-              - “로또는 크게(2칸)”를 계속 원하면 로또에 col-span-2를 다시 넣으면 됩니다.
-            */}
           </div>
 
           {/* Display */}
@@ -238,16 +229,13 @@ export default function Home() {
 
           <OnlineStats />
 
-<div className="mt-4">
-  <LevelWidget />
-</div>
-
-{/* Buttons */}
-<div className="grid grid-cols-4 gap-3">
-
+          {/* ✅ 수평계 */}
+          <div className="mt-4">
+            <LevelWidget />
+          </div>
 
           {/* Buttons */}
-          <div className="grid grid-cols-4 gap-3">
+          <div className="mt-4 grid grid-cols-4 gap-3">
             <button
               onClick={handleClear}
               className="col-span-2 rounded-lg bg-red-500 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-red-600 active:bg-red-700"
@@ -267,24 +255,99 @@ export default function Home() {
               ÷
             </button>
 
-            <button onClick={() => handleNumber('7')} className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">7</button>
-            <button onClick={() => handleNumber('8')} className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">8</button>
-            <button onClick={() => handleNumber('9')} className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">9</button>
-            <button onClick={() => handleOperation('×')} className="rounded-lg bg-orange-500 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-orange-600 active:bg-orange-700">×</button>
+            <button
+              onClick={() => handleNumber('7')}
+              className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+            >
+              7
+            </button>
+            <button
+              onClick={() => handleNumber('8')}
+              className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+            >
+              8
+            </button>
+            <button
+              onClick={() => handleNumber('9')}
+              className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+            >
+              9
+            </button>
+            <button
+              onClick={() => handleOperation('×')}
+              className="rounded-lg bg-orange-500 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-orange-600 active:bg-orange-700"
+            >
+              ×
+            </button>
 
-            <button onClick={() => handleNumber('4')} className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">4</button>
-            <button onClick={() => handleNumber('5')} className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">5</button>
-            <button onClick={() => handleNumber('6')} className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">6</button>
-            <button onClick={() => handleOperation('-')} className="rounded-lg bg-orange-500 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-orange-600 active:bg-orange-700">−</button>
+            <button
+              onClick={() => handleNumber('4')}
+              className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+            >
+              4
+            </button>
+            <button
+              onClick={() => handleNumber('5')}
+              className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+            >
+              5
+            </button>
+            <button
+              onClick={() => handleNumber('6')}
+              className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+            >
+              6
+            </button>
+            <button
+              onClick={() => handleOperation('-')}
+              className="rounded-lg bg-orange-500 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-orange-600 active:bg-orange-700"
+            >
+              −
+            </button>
 
-            <button onClick={() => handleNumber('1')} className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">1</button>
-            <button onClick={() => handleNumber('2')} className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">2</button>
-            <button onClick={() => handleNumber('3')} className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">3</button>
-            <button onClick={() => handleOperation('+')} className="rounded-lg bg-orange-500 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-orange-600 active:bg-orange-700">+</button>
+            <button
+              onClick={() => handleNumber('1')}
+              className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+            >
+              1
+            </button>
+            <button
+              onClick={() => handleNumber('2')}
+              className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+            >
+              2
+            </button>
+            <button
+              onClick={() => handleNumber('3')}
+              className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+            >
+              3
+            </button>
+            <button
+              onClick={() => handleOperation('+')}
+              className="rounded-lg bg-orange-500 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-orange-600 active:bg-orange-700"
+            >
+              +
+            </button>
 
-            <button onClick={() => handleNumber('0')} className="col-span-2 rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">0</button>
-            <button onClick={handleDecimal} className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">.</button>
-            <button onClick={handleEquals} className="rounded-lg bg-green-500 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-600 active:bg-green-700">=</button>
+            <button
+              onClick={() => handleNumber('0')}
+              className="col-span-2 rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+            >
+              0
+            </button>
+            <button
+              onClick={handleDecimal}
+              className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+            >
+              .
+            </button>
+            <button
+              onClick={handleEquals}
+              className="rounded-lg bg-green-500 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-600 active:bg-green-700"
+            >
+              =
+            </button>
           </div>
         </div>
       </div>
