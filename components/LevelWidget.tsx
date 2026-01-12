@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 function clamp(n: number, a: number, b: number) {
   return Math.max(a, Math.min(b, n));
 }
-
 function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t;
 }
@@ -13,22 +12,24 @@ function lerp(a: number, b: number, t: number) {
 type Mode = 'sensor' | 'mouse';
 
 export default function LevelWidget() {
-  // 화면에 보여줄 기울기(스무딩된 값)
-  const [tilt, setTilt] = useState(0); // degrees, left(-) / right(+)
-  const tiltRef = useRef(0);
+  // ✅ 스무딩된 값(화면 표시용)
+  const [roll, setRoll] = useState(0);  // 좌/우 (gamma)
+  const [pitch, setPitch] = useState(0); // 앞/뒤 (beta)
+
+  // ✅ 입력 원본(ref)
+  const rollRef = useRef(0);
+  const pitchRef = useRef(0);
 
   const [mode, setMode] = useState<Mode>('mouse');
   const [permissionNeeded, setPermissionNeeded] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState(false);
 
-  // “수평” 판정
-  const LEVEL_DEG = 1.5; // 이 값 이하이면 수평으로 판정
-  const isLevel = Math.abs(tilt) <= LEVEL_DEG;
-
-  // “수평 진입” 순간에만 ding 1번 울리기
+  // ✅ “수평” 판정: 두 축 모두 통과해야 OK
+  const LEVEL_DEG = 1.5;
+  const isLevel = Math.abs(roll) <= LEVEL_DEG && Math.abs(pitch) <= LEVEL_DEG;
   const prevLevelRef = useRef(false);
 
-  // WebAudio (ding)
+  // ✅ Ding (WebAudio)
   const audioCtxRef = useRef<AudioContext | null>(null);
   const canDingRef = useRef(true);
 
@@ -44,13 +45,11 @@ export default function LevelWidget() {
 
   const ding = async () => {
     try {
-      if (!canDingRef.current) return; // 과도한 연속 재생 방지
+      if (!canDingRef.current) return;
       canDingRef.current = false;
       setTimeout(() => (canDingRef.current = true), 450);
 
       const ctx = await ensureAudio();
-
-      // “딩!”: 2음으로 살짝 게임느낌
       const now = ctx.currentTime;
 
       const o1 = ctx.createOscillator();
@@ -78,16 +77,12 @@ export default function LevelWidget() {
       g2.connect(ctx.destination);
       o2.start(now + 0.04);
       o2.stop(now + 0.20);
-    } catch {
-      // 오디오 실패는 무시 (권한/브라우저 제한 등)
-    }
+    } catch {}
   };
 
-  // 센서 이벤트 등록
+  // ✅ 센서 지원/권한 체크
   useEffect(() => {
     const supports = typeof window !== 'undefined' && 'DeviceOrientationEvent' in window;
-
-    // iOS는 사용자 제스처로 requestPermission이 필요할 수 있음
     const isIOS =
       typeof navigator !== 'undefined' &&
       /iPad|iPhone|iPod/.test(navigator.userAgent) &&
@@ -107,7 +102,6 @@ export default function LevelWidget() {
     }
   }, []);
 
-  // requestPermission 버튼
   const requestIOSPermission = async () => {
     try {
       const fn = (DeviceOrientationEvent as any).requestPermission;
@@ -126,21 +120,27 @@ export default function LevelWidget() {
     }
   };
 
-  // 센서/마우스 입력 -> tiltRef 갱신
+  // ✅ 입력 처리: sensor(γ/β) + mouse(x/y)
   useEffect(() => {
-    // 센서 모드
     const onOrient = (e: DeviceOrientationEvent) => {
-      // gamma: left/right (-90~90)
+      // gamma: 좌/우, beta: 앞/뒤
       const g = typeof e.gamma === 'number' ? e.gamma : 0;
-      // 너무 튀는 값 제한
-      tiltRef.current = clamp(g, -25, 25);
+      const b = typeof e.beta === 'number' ? e.beta : 0;
+
+      // 과도 값 제한 (표시/게임 느낌)
+      rollRef.current = clamp(g, -25, 25);
+      pitchRef.current = clamp(b, -25, 25);
     };
 
-    // 마우스 모드(데스크탑용)
     const onMouse = (e: MouseEvent) => {
       const cx = window.innerWidth / 2;
-      const dx = (e.clientX - cx) / cx; // -1~1 근사
-      tiltRef.current = clamp(dx * 18, -25, 25);
+      const cy = window.innerHeight / 2;
+      const dx = (e.clientX - cx) / cx; // -1~1
+      const dy = (e.clientY - cy) / cy; // -1~1
+
+      rollRef.current = clamp(dx * 18, -25, 25);
+      // 마우스는 위로 갈수록 -로(“앞/뒤” 느낌은 취향), 여기선 아래로 갈수록 +로 둠
+      pitchRef.current = clamp(dy * 18, -25, 25);
     };
 
     if (mode === 'sensor') {
@@ -153,44 +153,46 @@ export default function LevelWidget() {
     return () => window.removeEventListener('mousemove', onMouse);
   }, [mode, permissionNeeded, permissionGranted]);
 
-  // 스무딩 렌더 루프 + “수평 진입” 체크
+  // ✅ 스무딩 루프
   useEffect(() => {
     let raf = 0;
-
     const tick = () => {
       raf = requestAnimationFrame(tick);
-
-      const current = tiltRef.current;
-      setTilt((prev) => {
-        const next = lerp(prev, current, 0.12);
-        return next;
-      });
+      setRoll((prev) => lerp(prev, rollRef.current, 0.12));
+      setPitch((prev) => lerp(prev, pitchRef.current, 0.12));
     };
-
     tick();
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // 수평 진입 시 ding + 초록 불(OK 램프)
+  // ✅ 수평 “진입” 순간에만 딩
   useEffect(() => {
     const prev = prevLevelRef.current;
-    if (!prev && isLevel) {
-      // 수평이 "되었다" 순간
-      ding();
-    }
+    if (!prev && isLevel) ding();
     prevLevelRef.current = isLevel;
   }, [isLevel]);
 
-  // HUD 표현값
-  const maxDeg = 18; // 게이지가 꽉 차는 기준 각도
-  const norm = clamp(tilt / maxDeg, -1, 1); // -1~1
-  const needleX = norm * 42; // px 이동량
+  // HUD 계산
+  const maxDeg = 18; // 게이지 풀스케일
+  const rollNorm = clamp(roll / maxDeg, -1, 1);
+  const pitchNorm = clamp(pitch / maxDeg, -1, 1);
 
-  const hudText = useMemo(() => {
-    const v = Math.round(tilt * 10) / 10;
-    const sign = v > 0 ? '+' : '';
-    return `${sign}${v}°`;
-  }, [tilt]);
+  const needleX = rollNorm * 42; // 좌/우 바늘 이동
+  const bubbleX = rollNorm * 52; // 버블 이동(가로)
+  const bubbleY = pitchNorm * 18; // 버블 이동(세로)
+
+  const rollText = useMemo(() => {
+    const v = Math.round(roll * 10) / 10;
+    return `${v > 0 ? '+' : ''}${v}°`;
+  }, [roll]);
+
+  const pitchText = useMemo(() => {
+    const v = Math.round(pitch * 10) / 10;
+    return `${v > 0 ? '+' : ''}${v}°`;
+  }, [pitch]);
+
+  const padBtn =
+    'select-none touch-none rounded-xl px-3 py-2 font-mono text-[12px] shadow-[0_0_0_1px_rgba(255,255,255,0.10)] active:scale-[0.98] transition';
 
   return (
     <div className="relative w-full overflow-hidden rounded-2xl bg-black/70 p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.12)]">
@@ -204,9 +206,7 @@ export default function LevelWidget() {
       <div className="relative mb-3 flex items-center justify-between">
         <div className="font-mono text-xs tracking-[0.22em] text-white/80">
           LEVEL HUD
-          <span className="ml-2 text-[10px] text-white/50">
-            {mode === 'sensor' ? '(SENSOR)' : '(MOUSE)'}
-          </span>
+          <span className="ml-2 text-[10px] text-white/50">{mode === 'sensor' ? '(SENSOR)' : '(MOUSE)'}</span>
         </div>
 
         {/* OK Lamp */}
@@ -222,88 +222,139 @@ export default function LevelWidget() {
         </div>
       </div>
 
-      {/* Gauge */}
-      <div className="relative">
-        {/* Track */}
-        <div className="h-10 rounded-xl bg-white/5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)]">
-          {/* Neon center marker */}
-          <div className="pointer-events-none absolute left-1/2 top-0 h-10 w-[2px] -translate-x-1/2 bg-emerald-400/70 shadow-[0_0_18px_rgba(52,211,153,0.7)]" />
-          {/* Tick marks */}
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-between px-4 opacity-60">
-            {Array.from({ length: 9 }).map((_, i) => (
+      {/* ✅ 2축 HUD */}
+      <div className="relative grid grid-cols-[64px_1fr] gap-3">
+        {/* LEFT: Pitch meter (앞/뒤) */}
+        <div className="relative">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="font-mono text-[10px] text-white/65">PITCH</div>
+            <div className="font-mono text-[10px] text-white/70">{pitchText}</div>
+          </div>
+
+          <div className="relative h-10 rounded-xl bg-white/5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)]">
+            {/* center line */}
+            <div className="pointer-events-none absolute left-0 top-1/2 h-[2px] w-full -translate-y-1/2 bg-emerald-400/50 shadow-[0_0_16px_rgba(52,211,153,0.55)]" />
+            {/* up/down hints */}
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-between px-2">
+              <span className="font-mono text-[10px] text-white/40">↑</span>
+              <span className="font-mono text-[10px] text-white/40">↓</span>
+            </div>
+          </div>
+
+          {/* Pitch bubble (vertical guide) */}
+          <div className="relative mt-2 h-10 rounded-xl bg-white/5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)]">
+            <div className="pointer-events-none absolute left-1/2 top-0 h-full w-[2px] -translate-x-1/2 bg-white/15" />
+            <div
+              className={[
+                'absolute left-1/2 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full',
+                isLevel ? 'bg-emerald-300 shadow-[0_0_14px_rgba(52,211,153,0.65)]' : 'bg-cyan-300/70 shadow-[0_0_14px_rgba(34,211,238,0.35)]',
+              ].join(' ')}
+              style={{ transform: `translate(-50%, calc(-50% + ${bubbleY}px))` }}
+              title="PITCH"
+            />
+            <div className="mt-1 flex items-center justify-between px-1">
+              <span className="font-mono text-[9px] text-white/45">앞</span>
+              <span className="font-mono text-[9px] text-white/45">뒤</span>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT: Roll bar (좌/우) + bubble */}
+        <div className="relative">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="font-mono text-[10px] text-white/65">ROLL</div>
+            <div className="font-mono text-[10px] text-white/70">{rollText}</div>
+          </div>
+
+          {/* Roll Track */}
+          <div className="relative h-10 rounded-xl bg-white/5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)]">
+            {/* Neon center marker */}
+            <div className="pointer-events-none absolute left-1/2 top-0 h-10 w-[2px] -translate-x-1/2 bg-emerald-400/70 shadow-[0_0_18px_rgba(52,211,153,0.7)]" />
+
+            {/* Tick marks */}
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-between px-4 opacity-60">
+              {Array.from({ length: 9 }).map((_, i) => (
+                <div
+                  key={i}
+                  className={[
+                    'w-[2px] rounded-full bg-white/25',
+                    i === 4 ? 'h-6 bg-emerald-300/70 shadow-[0_0_14px_rgba(52,211,153,0.55)]' : 'h-3',
+                  ].join(' ')}
+                />
+              ))}
+            </div>
+
+            {/* Direction fill */}
+            <div className="relative h-full overflow-hidden rounded-xl">
               <div
-                key={i}
-                className={[
-                  'w-[2px] rounded-full bg-white/25',
-                  i === 4 ? 'h-6 bg-emerald-300/70 shadow-[0_0_14px_rgba(52,211,153,0.55)]' : 'h-3',
-                ].join(' ')}
-              />
-            ))}
-          </div>
-
-          {/* Fill (directional) */}
-          <div className="relative h-full overflow-hidden rounded-xl">
-            <div
-              className="absolute top-0 h-full w-1/2"
-              style={{
-                left: '50%',
-                transform: `translateX(${Math.min(0, needleX)}px)`,
-              }}
-            >
-              <div className="h-full w-full bg-cyan-400/20 shadow-[0_0_20px_rgba(34,211,238,0.35)]" />
+                className="absolute top-0 h-full w-1/2"
+                style={{ left: '50%', transform: `translateX(${Math.min(0, needleX)}px)` }}
+              >
+                <div className="h-full w-full bg-cyan-400/20 shadow-[0_0_20px_rgba(34,211,238,0.35)]" />
+              </div>
+              <div
+                className="absolute top-0 h-full w-1/2"
+                style={{ right: '50%', transform: `translateX(${Math.max(0, needleX)}px)` }}
+              >
+                <div className="h-full w-full bg-fuchsia-400/20 shadow-[0_0_20px_rgba(232,121,249,0.30)]" />
+              </div>
             </div>
+
+            {/* Needle */}
             <div
-              className="absolute top-0 h-full w-1/2"
-              style={{
-                right: '50%',
-                transform: `translateX(${Math.max(0, needleX)}px)`,
-              }}
+              className={['absolute left-1/2 top-1/2 -translate-y-1/2', isLevel ? 'needlePulse' : ''].join(' ')}
+              style={{ transform: `translate(calc(-50% + ${needleX}px), -50%)` }}
             >
-              <div className="h-full w-full bg-fuchsia-400/20 shadow-[0_0_20px_rgba(232,121,249,0.30)]" />
+              <div className="h-12 w-2 rounded-full bg-white/85 shadow-[0_0_18px_rgba(255,255,255,0.45)]" />
+              <div className="mx-auto mt-1 h-2 w-2 rounded-full bg-white/70 shadow-[0_0_16px_rgba(255,255,255,0.35)]" />
             </div>
           </div>
-        </div>
 
-        {/* Needle */}
-        <div
-          className={[
-            'absolute left-1/2 top-1/2 -translate-y-1/2',
-            isLevel ? 'needlePulse' : '',
-          ].join(' ')}
-          style={{ transform: `translate(calc(-50% + ${needleX}px), -50%)` }}
-        >
-          <div className="h-12 w-2 rounded-full bg-white/85 shadow-[0_0_18px_rgba(255,255,255,0.45)]" />
-          <div className="mx-auto mt-1 h-2 w-2 rounded-full bg-white/70 shadow-[0_0_16px_rgba(255,255,255,0.35)]" />
-        </div>
-      </div>
+          {/* 2D Bubble (roll + pitch 같이 보여주기) */}
+          <div className="relative mt-3 h-10 rounded-xl bg-white/5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)]">
+            <div className="pointer-events-none absolute left-1/2 top-0 h-full w-[2px] -translate-x-1/2 bg-white/15" />
+            <div className="pointer-events-none absolute left-0 top-1/2 h-[2px] w-full -translate-y-1/2 bg-white/10" />
 
-      {/* Footer readout */}
-      <div className="relative mt-3 flex items-center justify-between">
-        <div className="font-mono text-[11px] text-white/60">
-          THRESH: ±{LEVEL_DEG}°
+            <div
+              className={[
+                'absolute left-1/2 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full',
+                isLevel ? 'bg-emerald-300 shadow-[0_0_14px_rgba(52,211,153,0.65)]' : 'bg-white/70 shadow-[0_0_14px_rgba(255,255,255,0.25)]',
+              ].join(' ')}
+              style={{
+                transform: `translate(calc(-50% + ${bubbleX}px), calc(-50% + ${bubbleY}px))`,
+              }}
+              title="2D BUBBLE"
+            />
+
+            <div className="absolute left-2 top-1/2 -translate-y-1/2 font-mono text-[9px] text-white/40">←</div>
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[9px] text-white/40">→</div>
+            <div className="absolute left-1/2 top-1 -translate-x-1/2 font-mono text-[9px] text-white/40">↑</div>
+            <div className="absolute left-1/2 bottom-1 -translate-x-1/2 font-mono text-[9px] text-white/40">↓</div>
+          </div>
+
+          <div className="relative mt-2 flex items-center justify-between">
+            <div className="font-mono text-[11px] text-white/60">THRESH: ±{LEVEL_DEG}° (ROLL+PITCH)</div>
+            <div className="font-mono text-[11px] text-white/65">
+              {isLevel ? 'LEVEL LOCK' : 'ADJUST'}
+            </div>
+          </div>
         </div>
-        <div className="font-mono text-sm text-white/85">{hudText}</div>
       </div>
 
       {/* iOS permission prompt */}
       {permissionNeeded && !permissionGranted && (
         <div className="relative mt-3 rounded-xl bg-white/5 p-3 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)]">
-          <div className="font-mono text-xs text-white/80">
-            iPhone/iPad에서 센서 사용 권한이 필요합니다.
-          </div>
+          <div className="font-mono text-xs text-white/80">iPhone/iPad에서 센서 사용 권한이 필요합니다.</div>
           <button
             onClick={requestIOSPermission}
             className="mt-2 w-full rounded-lg bg-emerald-600/80 px-3 py-2 text-sm font-mono text-black hover:bg-emerald-600 active:bg-emerald-700"
           >
-            센센서 권한 허용
+            센서 권한 허용
           </button>
-          <div className="mt-2 font-mono text-[11px] text-white/55">
-            * 버튼을 눌러야 기울기(수평계)가 작동합니다.
-          </div>
+          <div className="mt-2 font-mono text-[11px] text-white/55">* 버튼을 눌러야 기울기(수평계)가 작동합니다.</div>
         </div>
       )}
 
-      {/* Styled effects */}
       <style jsx>{`
         .scanlines {
           background: repeating-linear-gradient(
