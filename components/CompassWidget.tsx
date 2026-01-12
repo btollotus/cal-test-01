@@ -54,7 +54,7 @@ export default function CompassWidget() {
     if (delta > 180) delta -= 360;
     if (delta < -180) delta += 360;
 
-    const smoothed = prev + delta * 0.15; // 0.1~0.2 정도가 부드러움
+    const smoothed = prev + delta * 0.15;
     smoothRef.current = smoothed;
     setHeading(smoothed);
   };
@@ -124,18 +124,47 @@ export default function CompassWidget() {
           <div className="absolute top-1/2 left-0 h-px w-full -translate-y-1/2 bg-white/10" />
 
           {/* N/E/S/W */}
-          <div className="absolute left-1/2 top-2 -translate-x-1/2 font-mono text-xs text-white/70">N</div>
+          <div
+            className="
+              absolute left-1/2 top-2 -translate-x-1/2
+              font-mono text-xs font-bold text-emerald-300
+              drop-shadow-[0_0_10px_rgba(52,211,153,0.95)]
+            "
+          >
+            N
+          </div>
           <div className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-xs text-white/70">E</div>
           <div className="absolute left-1/2 bottom-2 -translate-x-1/2 font-mono text-xs text-white/70">S</div>
           <div className="absolute left-2 top-1/2 -translate-y-1/2 font-mono text-xs text-white/70">W</div>
 
-{/* 바늘(북쪽) - 중앙 회전 고정 */}
-<div
-  className="absolute left-1/2 top-1/2 transition-transform duration-100"
-  style={{ transform: `translate(-50%, -50%) rotate(${rot}deg)` }}
->
-  <div className="h-[42%] w-1 origin-bottom -translate-y-[85%] rounded-full bg-rose-400 shadow-[0_0_18px_rgba(251,113,133,0.7)]" />
-</div>
+          {/* ✅ 바늘(삼각형 포인터 + 네온) : 중앙 기준 회전 */}
+          <div
+            className="absolute left-1/2 top-1/2 transition-transform duration-100"
+            style={{ transform: `translate(-50%, -50%) rotate(${-rot}deg)` }}
+          >
+            {/* 몸통 */}
+            <div
+              className="
+                absolute left-1/2 -translate-x-1/2
+                -top-[40%]
+                h-[40%] w-[2px]
+                bg-rose-400
+                drop-shadow-[0_0_12px_rgba(251,113,133,0.85)]
+              "
+            />
+            {/* 삼각형 끝 */}
+            <div
+              className="
+                absolute left-1/2 -translate-x-1/2
+                -top-[46%]
+                w-0 h-0
+                border-l-[8px] border-l-transparent
+                border-r-[8px] border-r-transparent
+                border-b-[18px] border-b-rose-400
+                drop-shadow-[0_0_14px_rgba(251,113,133,0.95)]
+              "
+            />
+          </div>
 
           {/* 중심 점 */}
           <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-300 shadow-[0_0_14px_rgba(52,211,153,0.8)]" />
