@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import OnlineStats from "@/components/OnlineStats";
+import LevelWidget from '@/components/LevelWidget';
+
 
 export default function Home() {
   // ✅ Intro 상태
@@ -235,6 +237,14 @@ export default function Home() {
           </div>
 
           <OnlineStats />
+
+<div className="mt-4">
+  <LevelWidget />
+</div>
+
+{/* Buttons */}
+<div className="grid grid-cols-4 gap-3">
+
 
           {/* Buttons */}
           <div className="grid grid-cols-4 gap-3">
