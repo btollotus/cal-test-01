@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import OnlineStats from '@/components/OnlineStats';
 
@@ -11,45 +11,42 @@ function zodiacKorean(birthYear: number) {
   return animals[idx];
 }
 
-// FX 데이터 소스(무료 JSON, 최신값)
-const fxUrl = (base: string) =>
-  `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/${base}.json`;
-
 type FxCur = 'USD' | 'CNY' | 'EUR' | 'JPY';
-type FxDir = 'KRW_TO_FX' | 'FX_TO_KRW';
+type FxDir = 'KRW_TO' | 'TO_KRW';
+
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+};
 
 export default function Home() {
-  // ✅ Intro
+  // ✅ Intro 상태
   const [showIntro, setShowIntro] = useState(true);
 
-  // ✅ 계산기 상태
+  // -------------------- 계산기 상태 --------------------
   const [display, setDisplay] = useState('0');
   const [previousValue, setPreviousValue] = useState<number | null>(null);
   const [operation, setOperation] = useState<string | null>(null);
   const [waitingForNewValue, setWaitingForNewValue] = useState(false);
   const [error, setError] = useState(false);
 
-  // ✅ 과정(식) + AGE 결과
-  const [expr, setExpr] = useState<string>('');
-  const [ageInfo, setAgeInfo] = useState<string>('');
+  // ✅ “과정 표시(식)”
+  const [expr, setExpr] = useState<string>(''); // 예: "1 + 1"
 
-  // ✅ PWA 설치 버튼
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const canInstall = !!deferredPrompt;
+  // ✅ 나이 계산 결과 라인
+  const [ageInfo, setAgeInfo] = useState<string>(''); // 예: "세는나이 42세 · 돼지띠"
 
-  const isIOS = useMemo(() => {
-    if (typeof navigator === 'undefined') return false;
-    return /iphone|ipad|ipod/i.test(navigator.userAgent);
-  }, []);
-
-  // ✅ FX 상태
+  // ✅ 환율 계산 결과 라인
+  const [fxInfo, setFxInfo] = useState<string>(''); // 예: "1 USD = 1324.78 KRW"
   const [fxCur, setFxCur] = useState<FxCur>('USD');
-  const [fxDir, setFxDir] = useState<FxDir>('KRW_TO_FX');
+  const [fxDir, setFxDir] = useState<FxDir>('KRW_TO');
+  const [fxRatesKRWPer, setFxRatesKRWPer] = useState<Record<FxCur, number> | null>(null);
   const [fxLoading, setFxLoading] = useState(false);
   const [fxErr, setFxErr] = useState<string | null>(null);
-  const [fxDate, setFxDate] = useState<string | null>(null);
-  // 1 외화 = ? KRW (예: 1 USD = 1320 KRW)
-  const [fxKRWPer, setFxKRWPer] = useState<Record<FxCur, number> | null>(null);
+
+  // ✅ PWA 설치 버튼
+  const [canInstall, setCanInstall] = useState(false);
+  const installPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
 
   // ✅ Intro 타이밍
   useEffect(() => {
@@ -57,50 +54,53 @@ export default function Home() {
     return () => clearTimeout(t);
   }, []);
 
-  // ✅ PWA beforeinstallprompt 캐치
+  // ✅ PWA install prompt 잡기
   useEffect(() => {
-    const handler = (e: any) => {
+    const handler = (e: Event) => {
       e.preventDefault();
-      setDeferredPrompt(e);
+      installPromptRef.current = e as BeforeInstallPromptEvent;
+      setCanInstall(true);
     };
-    window.addEventListener('beforeinstallprompt', handler as any);
-    return () => window.removeEventListener('beforeinstallprompt', handler as any);
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
   const handleInstall = async () => {
+    const p = installPromptRef.current;
+    if (!p) return;
     try {
-      if (!deferredPrompt) return;
-      deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
-      setDeferredPrompt(null);
-    } catch {
-      // 무시
+      await p.prompt();
+      await p.userChoice;
+    } finally {
+      installPromptRef.current = null;
+      setCanInstall(false);
     }
   };
 
   const formatDisplay = (value: string): string => {
     if (value === 'Error' || value === '' || error) return value;
 
-    const numValue = parseFloat(value);
-    if (isNaN(numValue)) return value;
+    const numValue = Number(value);
+    if (!Number.isFinite(numValue)) return value;
 
     if (value.includes('.')) {
       const [integerPart, decimalPart] = value.split('.');
-      const formattedInteger = parseFloat(integerPart).toLocaleString('en-US');
+      const formattedInteger = Number(integerPart || '0').toLocaleString('en-US');
       return `${formattedInteger}.${decimalPart}`;
     }
     return numValue.toLocaleString('en-US');
   };
 
-  const clearCalcStateKeepDisplay = () => {
-    setPreviousValue(null);
-    setOperation(null);
-    setWaitingForNewValue(false);
-    setError(false);
+  // 입력 시작 시 정보라인 정리(나이/환율)
+  const clearInfosForNewTyping = () => {
+    if (ageInfo) setAgeInfo('');
+    if (fxInfo) setFxInfo('');
+    if (fxErr) setFxErr(null);
   };
 
   const handleNumber = (num: string) => {
-    if (ageInfo) setAgeInfo('');
+    clearInfosForNewTyping();
+
     if (error) {
       setDisplay(num);
       setError(false);
@@ -135,7 +135,7 @@ export default function Home() {
 
   const handleOperation = (op: string) => {
     if (error) return;
-    if (ageInfo) setAgeInfo('');
+    clearInfosForNewTyping();
 
     const currentValue = parseFloat(display);
 
@@ -191,10 +191,13 @@ export default function Home() {
     setError(false);
     setExpr('');
     setAgeInfo('');
+    setFxInfo('');
+    setFxErr(null);
   };
 
   const handleBackspace = () => {
-    if (ageInfo) setAgeInfo('');
+    clearInfosForNewTyping();
+
     if (error) {
       handleClear();
       return;
@@ -206,7 +209,7 @@ export default function Home() {
   };
 
   const handleDecimal = () => {
-    if (ageInfo) setAgeInfo('');
+    clearInfosForNewTyping();
 
     if (error) {
       setDisplay('0.');
@@ -224,118 +227,127 @@ export default function Home() {
     }
   };
 
-  // ✅ AGE
+  // -------------------- 나이 계산 --------------------
   const handleAge = () => {
+    setFxErr(null);
+    setFxInfo('');
+
     const y = parseInt(display, 10);
     const now = new Date();
     const currentYear = now.getFullYear();
 
-    if (isNaN(y) || String(y).length !== 4 || y < 1900 || y > currentYear) {
-      setExpr('AGE');
-      setAgeInfo('⚠️ 출생년도 4자리(예: 1983)를 입력해주세요.');
+    if (Number.isNaN(y) || String(y).length !== 4 || y < 1900 || y > currentYear) {
+      setAgeInfo('⚠️ 출생년도 4자리(예: 1983)를 입력하세요');
       setWaitingForNewValue(true);
       return;
     }
 
     const koreanAge = currentYear - y + 1;
     const z = zodiacKorean(y);
-
-    setExpr(`AGE(${y})`);
     setAgeInfo(`세는나이 ${koreanAge}세 · ${z}띠`);
     setWaitingForNewValue(true);
   };
 
-  // ✅ FX: 최신 환율 로드
-  const loadFx = async () => {
+  // -------------------- 환율 로드 --------------------
+  const fetchFx = async () => {
     setFxLoading(true);
     setFxErr(null);
 
     try {
-      const [usd, cny, eur, jpy] = await Promise.all([
-        fetch(fxUrl('usd')).then((r) => r.json()),
-        fetch(fxUrl('cny')).then((r) => r.json()),
-        fetch(fxUrl('eur')).then((r) => r.json()),
-        fetch(fxUrl('jpy')).then((r) => r.json()),
-      ]);
+      // 무료/키 없이 사용 가능한 환율 API (기기/지역에 따라 값이 약간 다를 수 있음)
+      // base=KRW면: rates.USD = "1 KRW = ? USD"
+      const res = await fetch('https://api.exchangerate.host/latest?base=KRW&symbols=USD,EUR,CNY,JPY', {
+        cache: 'no-store',
+      });
 
-      const date =
-        usd?.date || cny?.date || eur?.date || jpy?.date || null;
+      const json = await res.json();
 
-      const next: Record<FxCur, number> = {
-        USD: Number(usd?.usd?.krw),
-        CNY: Number(cny?.cny?.krw),
-        EUR: Number(eur?.eur?.krw),
-        JPY: Number(jpy?.jpy?.krw),
+      if (!json || !json.rates) throw new Error('환율 응답이 올바르지 않습니다.');
+
+      const r = json.rates as Record<string, number>;
+
+      const usd = r.USD;
+      const eur = r.EUR;
+      const cny = r.CNY;
+      const jpy = r.JPY;
+
+      if (!usd || !eur || !cny || !jpy) throw new Error('환율 데이터가 부족합니다.');
+
+      // KRW per 1 foreign = 1 / (foreign per 1 KRW)
+      const ratesKRWPer: Record<FxCur, number> = {
+        USD: 1 / usd,
+        EUR: 1 / eur,
+        CNY: 1 / cny,
+        JPY: 1 / jpy,
       };
 
-      if (!next.USD || !next.CNY || !next.EUR || !next.JPY) {
-        throw new Error('환율 데이터를 읽지 못했습니다.');
-      }
-
-      setFxDate(date);
-      setFxKRWPer(next);
+      setFxRatesKRWPer(ratesKRWPer);
     } catch (e: any) {
-      setFxErr(e?.message ?? '환율 불러오기 실패');
-      setFxKRWPer(null);
-      setFxDate(null);
+      setFxRatesKRWPer(null);
+      setFxErr(e?.message ?? '환율 로드 실패');
     } finally {
       setFxLoading(false);
     }
   };
 
-  // 첫 진입 시 자동 로드
   useEffect(() => {
-    loadFx();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    fetchFx();
   }, []);
 
-  const cycleFxCur = () => {
-    const order: FxCur[] = ['USD', 'CNY', 'EUR', 'JPY'];
-    const i = order.indexOf(fxCur);
-    setFxCur(order[(i + 1) % order.length]);
-  };
-
-  const toggleFxDir = () => {
-    setFxDir((d) => (d === 'KRW_TO_FX' ? 'FX_TO_KRW' : 'KRW_TO_FX'));
-  };
-
-  // ✅ FX 계산 실행
+  // -------------------- 환율 계산 --------------------
   const handleFX = () => {
-    if (!fxKRWPer) {
-      setExpr('FX');
-      setAgeInfo(fxErr ? `⚠️ ${fxErr}` : '⚠️ 환율을 불러오는 중입니다.');
+    setAgeInfo('');
+    setExpr('');
+
+    if (!fxRatesKRWPer) {
+      setFxErr('환율이 아직 준비되지 않았습니다. (새로고침 후 다시 시도)');
       setWaitingForNewValue(true);
       return;
     }
 
-    const v = parseFloat(display);
-    if (isNaN(v)) return;
-
-    const rate = fxKRWPer[fxCur]; // 1 FX = rate KRW
-    const dirText = fxDir === 'KRW_TO_FX' ? `KRW→${fxCur}` : `${fxCur}→KRW`;
-
-    let result: number;
-    if (fxDir === 'KRW_TO_FX') {
-      result = v / rate;
-    } else {
-      result = v * rate;
+    const amount = Number(display);
+    if (!Number.isFinite(amount)) {
+      setFxErr('숫자를 입력하세요');
+      setWaitingForNewValue(true);
+      return;
     }
 
-    clearCalcStateKeepDisplay();
-    setExpr(`FX ${dirText}${fxDate ? ` (${fxDate})` : ''}`);
-    setAgeInfo(`1 ${fxCur} = ${rate.toLocaleString('en-US')} KRW`);
-    setDisplay(String(result));
+    const rate = fxRatesKRWPer[fxCur]; // 1 fxCur = rate KRW
+
+    // ✅ 환율 표시: 소수점 2자리
+    setFxInfo(`1 ${fxCur} = ${rate.toFixed(2)} KRW`);
+
+    let result = 0;
+
+    if (fxDir === 'KRW_TO') {
+      // KRW -> FX : amount(KRW) / (KRW per 1 FX)
+      result = amount / rate;
+    } else {
+      // FX -> KRW : amount(FX) * (KRW per 1 FX)
+      result = amount * rate;
+    }
+
+    // ✅ 결과값: 소수점 2자리 고정
+    setDisplay(result.toFixed(2));
     setWaitingForNewValue(true);
   };
 
+  const fxTitle = useMemo(() => {
+    const from = fxDir === 'KRW_TO' ? 'KRW' : fxCur;
+    const to = fxDir === 'KRW_TO' ? fxCur : 'KRW';
+    return `${from} → ${to}`;
+  }, [fxCur, fxDir]);
+
   return (
     <>
+      {/* ✅ Intro Overlay */}
       {showIntro && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center intro-bg">
           <div className="intro-logo select-none">JDg</div>
         </div>
       )}
 
+      {/* ✅ Main UI */}
       <div
         className={[
           'flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800',
@@ -343,8 +355,8 @@ export default function Home() {
         ].join(' ')}
       >
         <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-800">
-          {/* ✅ 바로가기 버튼 */}
-          <div className="mb-3 grid grid-cols-2 gap-2">
+          {/* ✅ 바로가기 버튼 영역 */}
+          <div className="mb-4 grid grid-cols-2 gap-2">
             <Link
               href="/cannon"
               className="rounded-lg bg-blue-500 px-3 py-3 text-center text-base font-bold text-white hover:bg-blue-600 active:bg-blue-700"
@@ -352,12 +364,12 @@ export default function Home() {
               🎯 포쏘기
             </Link>
 
-            {/* ✅ 활쏘기 삭제 → 수평계 메뉴로 대체 */}
+            {/* ❌ 활쏘기 삭제 / ✅ 수평계 메뉴로 대체 */}
             <Link
               href="/level"
               className="rounded-lg bg-emerald-600 px-3 py-3 text-center text-base font-bold text-white hover:bg-emerald-700 active:bg-emerald-800"
             >
-              📐 수평계
+              🧰 수평계
             </Link>
 
             <Link
@@ -390,63 +402,87 @@ export default function Home() {
           </div>
 
           {/* ✅ 홈 화면 설치 버튼(PWA) */}
-          <div className="mb-4">
-            {canInstall ? (
-              <button
-                onClick={handleInstall}
-                className="w-full rounded-lg bg-zinc-900 px-3 py-3 text-center text-sm font-bold text-white hover:bg-black active:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-              >
-                📲 홈 화면에 바로가기 설치
-              </button>
-            ) : (
-              <div className="rounded-lg bg-zinc-100 px-3 py-2 text-xs text-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-200">
-                {isIOS
-                  ? 'iPhone: 공유 버튼 → “홈 화면에 추가”로 설치할 수 있어요.'
-                  : '설치 가능한 환경이면 “홈 화면에 설치” 버튼이 자동으로 표시됩니다.'}
+          <button
+            onClick={handleInstall}
+            disabled={!canInstall}
+            className={[
+              'mb-4 w-full rounded-lg px-3 py-3 text-center text-sm font-bold transition-colors',
+              canInstall
+                ? 'bg-zinc-900 text-white hover:bg-zinc-800 active:bg-zinc-950 dark:bg-white dark:text-black dark:hover:bg-white/90'
+                : 'bg-zinc-400/60 text-white/80 cursor-not-allowed',
+            ].join(' ')}
+            title={canInstall ? '홈 화면에 설치(바로가기)' : '설치 버튼은 PWA 조건에서만 활성화됩니다'}
+          >
+            📲 홈 화면에 설치(바로가기)
+          </button>
+
+          <OnlineStats />
+
+          {/* ✅ 계산 과정 + 결과창 (폭 고정) */}
+          <div className="mt-4 mb-6 w-full min-w-0 rounded-lg bg-gray-900 p-6 text-right dark:bg-gray-950">
+            {/* 과정(식) */}
+            <div className="min-h-[18px] font-mono text-sm text-white/60">
+              {expr || '\u00A0'}
+            </div>
+
+            {/* 결과값 (tabular-nums로 폭 흔들림 최소화) */}
+            <div className="min-h-[54px] font-mono text-4xl font-semibold text-white tabular-nums">
+              {formatDisplay(display)}
+            </div>
+
+            {/* 나이/띠 결과 (항상 자리 확보 -> 레이아웃 흔들림 방지) */}
+            <div className="mt-2 min-h-[20px] font-mono text-sm text-emerald-200">
+              {ageInfo || '\u00A0'}
+            </div>
+
+            {/* 환율 정보 (항상 자리 확보) */}
+            <div className="mt-1 min-h-[18px] font-mono text-xs text-white/65">
+              {fxInfo || '\u00A0'}
+            </div>
+
+            {/* 환율 에러 (필요 시) */}
+            {fxErr && (
+              <div className="mt-1 font-mono text-xs text-rose-200">
+                {fxErr}
               </div>
             )}
           </div>
 
-          <OnlineStats />
-
-          {/* ✅ 계산 과정 + 결과창 */}
-          <div className="mt-4 mb-6 rounded-lg bg-gray-900 p-6 text-right dark:bg-gray-950">
-            {/* 과정(식) */}
-            <div className="min-h-[18px] font-mono text-sm text-white/60">{expr || '\u00A0'}</div>
-
-            {/* 결과값 */}
-            <div className="min-h-[54px] text-4xl font-mono font-semibold text-white">
-              {formatDisplay(display)}
+          {/* ✅ 환율 설정 UI */}
+          <div className="mb-4 grid grid-cols-2 gap-2">
+            <div className="rounded-lg bg-black/5 p-3 dark:bg-white/5">
+              <div className="mb-2 font-mono text-[11px] tracking-widest text-black/60 dark:text-white/60">
+                FX CURRENCY
+              </div>
+              <select
+                value={fxCur}
+                onChange={(e) => setFxCur(e.target.value as FxCur)}
+                className="w-full rounded-md bg-white px-3 py-2 text-sm font-semibold text-black shadow-sm outline-none ring-1 ring-black/10 dark:bg-zinc-900 dark:text-white dark:ring-white/10"
+              >
+                <option value="USD">USD (달러)</option>
+                <option value="CNY">CNY (위안)</option>
+                <option value="EUR">EUR (유로)</option>
+                <option value="JPY">JPY (엔)</option>
+              </select>
             </div>
 
-            {/* 부가 정보(AGE/FX 안내) */}
-            {ageInfo && <div className="mt-2 font-mono text-sm text-emerald-200">{ageInfo}</div>}
-
-            {/* FX 상태 */}
-            <div className="mt-3 flex items-center justify-between font-mono text-[11px] text-white/55">
-              <div className="flex items-center gap-2">
-                <span>FX:</span>
-                <span className="text-white/80">{fxCur}</span>
-                <span className="text-white/40">·</span>
-                <span className="text-white/80">{fxDir === 'KRW_TO_FX' ? 'KRW→FX' : 'FX→KRW'}</span>
+            <div className="rounded-lg bg-black/5 p-3 dark:bg-white/5">
+              <div className="mb-2 font-mono text-[11px] tracking-widest text-black/60 dark:text-white/60">
+                DIRECTION
               </div>
-              <div className="flex items-center gap-2">
-                {fxLoading ? (
-                  <span>환율 불러오는 중…</span>
-                ) : fxErr ? (
-                  <button onClick={loadFx} className="underline decoration-white/30 hover:text-white">
-                    환율 다시불러오기
-                  </button>
-                ) : (
-                  <span>{fxDate ? `기준일 ${fxDate}` : '기준일 —'}</span>
-                )}
-              </div>
+              <select
+                value={fxDir}
+                onChange={(e) => setFxDir(e.target.value as FxDir)}
+                className="w-full rounded-md bg-white px-3 py-2 text-sm font-semibold text-black shadow-sm outline-none ring-1 ring-black/10 dark:bg-zinc-900 dark:text-white dark:ring-white/10"
+              >
+                <option value="KRW_TO">KRW → 외화</option>
+                <option value="TO_KRW">외화 → KRW</option>
+              </select>
             </div>
           </div>
 
-          {/* ✅ Buttons */}
+          {/* Buttons */}
           <div className="mt-4 grid grid-cols-4 gap-3">
-            {/* Row 1 */}
             <button
               onClick={handleClear}
               className="col-span-2 rounded-lg bg-red-500 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-red-600 active:bg-red-700"
@@ -461,46 +497,15 @@ export default function Home() {
               ⌫
             </button>
 
+            {/* ✅ AGE 버튼 */}
             <button
-              onClick={handleFX}
-              className="rounded-lg bg-teal-600 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-teal-700 active:bg-teal-800"
-              title="환율 계산"
+              onClick={handleAge}
+              className="rounded-lg bg-orange-600 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-orange-700 active:bg-orange-800"
+              title="출생년도 4자리 입력 후 AGE"
             >
-              FX
+              AGE
             </button>
 
-            {/* Row 2 */}
-            <button
-              onClick={cycleFxCur}
-              className="rounded-lg bg-zinc-700 px-4 py-4 text-base font-semibold text-white transition-colors hover:bg-zinc-600 active:bg-zinc-500"
-              title="통화 변경(순환)"
-            >
-              {fxCur}
-            </button>
-
-            <button
-              onClick={toggleFxDir}
-              className="rounded-lg bg-zinc-700 px-4 py-4 text-base font-semibold text-white transition-colors hover:bg-zinc-600 active:bg-zinc-500"
-              title="방향 전환(KRW↔외화)"
-            >
-              ↔
-            </button>
-
-            <button
-              onClick={() => handleOperation('÷')}
-              className="rounded-lg bg-orange-500 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-orange-600 active:bg-orange-700"
-            >
-              ÷
-            </button>
-
-            <button
-              onClick={() => handleOperation('×')}
-              className="rounded-lg bg-orange-500 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-orange-600 active:bg-orange-700"
-            >
-              ×
-            </button>
-
-            {/* Row 3 */}
             <button onClick={() => handleNumber('7')} className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">
               7
             </button>
@@ -510,11 +515,10 @@ export default function Home() {
             <button onClick={() => handleNumber('9')} className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">
               9
             </button>
-            <button onClick={() => handleOperation('-')} className="rounded-lg bg-orange-500 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-orange-600 active:bg-orange-700">
-              −
+            <button onClick={() => handleOperation('÷')} className="rounded-lg bg-orange-500 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-orange-600 active:bg-orange-700">
+              ÷
             </button>
 
-            {/* Row 4 */}
             <button onClick={() => handleNumber('4')} className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">
               4
             </button>
@@ -524,11 +528,10 @@ export default function Home() {
             <button onClick={() => handleNumber('6')} className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">
               6
             </button>
-            <button onClick={() => handleOperation('+')} className="rounded-lg bg-orange-500 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-orange-600 active:bg-orange-700">
-              +
+            <button onClick={() => handleOperation('×')} className="rounded-lg bg-orange-500 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-orange-600 active:bg-orange-700">
+              ×
             </button>
 
-            {/* Row 5 */}
             <button onClick={() => handleNumber('1')} className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">
               1
             </button>
@@ -538,15 +541,10 @@ export default function Home() {
             <button onClick={() => handleNumber('3')} className="rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">
               3
             </button>
-            <button
-              onClick={handleAge}
-              className="rounded-lg bg-orange-600 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-orange-700 active:bg-orange-800"
-              title="출생년도 4자리 입력 후 AGE"
-            >
-              AGE
+            <button onClick={() => handleOperation('-')} className="rounded-lg bg-orange-500 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-orange-600 active:bg-orange-700">
+              −
             </button>
 
-            {/* Row 6 */}
             <button onClick={() => handleNumber('0')} className="col-span-2 rounded-lg bg-gray-200 px-4 py-4 text-lg font-semibold text-gray-800 transition-colors hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">
               0
             </button>
@@ -555,6 +553,28 @@ export default function Home() {
             </button>
             <button onClick={handleEquals} className="rounded-lg bg-green-500 px-4 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-600 active:bg-green-700">
               =
+            </button>
+
+            {/* ✅ FX 버튼 + 환율 새로고침 */}
+            <button
+              onClick={handleFX}
+              className="col-span-2 rounded-lg bg-indigo-600 px-4 py-3 text-lg font-semibold text-white transition-colors hover:bg-indigo-700 active:bg-indigo-800"
+              title="현재 표시된 숫자를 환율 변환"
+            >
+              FX ({fxTitle})
+            </button>
+
+            <button
+              onClick={fetchFx}
+              disabled={fxLoading}
+              className="col-span-2 rounded-lg bg-zinc-700 px-4 py-3 text-lg font-semibold text-white transition-colors hover:bg-zinc-600 active:bg-zinc-800 disabled:opacity-50"
+              title="오늘 환율 다시 불러오기"
+            >
+              {fxLoading ? 'RATE…' : 'RATE ↻'}
+            </button>
+
+            <button onClick={() => handleOperation('+')} className="col-span-4 rounded-lg bg-orange-500 px-4 py-3 text-lg font-semibold text-white transition-colors hover:bg-orange-600 active:bg-orange-700">
+              +
             </button>
           </div>
         </div>
