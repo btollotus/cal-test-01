@@ -203,7 +203,7 @@ export default function Home() {
     const koreanAge = currentYear - y + 1;
 
     const z = zodiacKorean(y);
-    setExpr(`AGE(${y})`);
+    setExpr(`(${y})년생`);
     setAgeInfo(`세는나이 ${koreanAge}세 · ${z}띠`);
     setWaitingForNewValue(true);
   };
