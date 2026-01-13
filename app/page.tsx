@@ -204,7 +204,7 @@ export default function Home() {
 
     const z = zodiacKorean(y);
     setExpr(`AGE(${y})`);
-    setAgeInfo(`만 ${approxMan - 1}~${approxMan}세(생일 기준) / 세는나이 ${koreanAge}세 · ${z}띠`);
+    setAgeInfo(`세는나이 ${koreanAge}세 · ${z}띠`);
     setWaitingForNewValue(true);
   };
 
