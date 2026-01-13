@@ -191,7 +191,7 @@ export default function Home() {
     const currentYear = now.getFullYear();
 
     if (isNaN(y) || String(y).length !== 4 || y < 1900 || y > currentYear) {
-      setAgeInfo('⚠️ 출생년도 4자리(예: 1983)를 입력해주세요.');
+      setAgeInfo('⚠️출생년도 4자리(예:1983)를 입력');
       return;
     }
 
