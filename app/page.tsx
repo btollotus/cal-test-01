@@ -150,6 +150,8 @@ export default function Home() {
           <Link href="/rps" className="rounded-xl bg-pink-600 py-4 text-center font-bold text-white">✊✋✌️ 가위바위보</Link>
           <Link href="/galaga" className="rounded-xl bg-sky-600 py-4 text-center font-bold text-white">🛸 겔러그</Link>
           <Link href="/lotto" className="rounded-xl bg-amber-600 py-4 text-center font-bold text-white">🧧 로또번호</Link>
+          <Link href="/fortune" className="rounded-lg bg-emerald-600 px-3 py-3 text-center text-base font-bold text-white hover:bg-emerald-700 active:bg-emerald-800">🔮 관상·띠·나이·오늘운세</Link>
+
         </div>
 
         {/* =========================
